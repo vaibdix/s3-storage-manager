@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from "react";
 import {
-  Download, Eye, Folder, Trash2, MoreHorizontal, FileText, Image, Archive, Music, Video, Code, FileIcon, Loader2
+  Download, Eye, Folder, Trash2, MoreHorizontal, FileText, Image, Archive, Music, Video, Code, FileIcon, Loader2, Edit2, Move, Copy
 } from "lucide-react";
 import { Button } from "../ui/button";
 import {
@@ -29,7 +29,16 @@ const getFileIcon = (fileName) => {
 };
 
 function FileTable({
-  items, selectedItems, onToggleSelection, onNavigateToFolder, onDownloadFile, onDeleteItems }) {
+  items,
+  selectedItems,
+  onToggleSelection,
+  onNavigateToFolder,
+  onDownloadFile,
+  onDeleteItems,
+  onRenameItem,
+  onMoveItem
+}) {
+  console.log('FileTable props:', { onRenameItem, onMoveItem }); // Debug log
   const [hoveredRow, setHoveredRow] = useState(null);
 
   const handleRowClick = useCallback(
@@ -222,41 +231,81 @@ function FileTable({
                   </TableCell>
 
                   <TableCell>
-                    <div className="flex items-center space-x-1">
-                      {/* Quick Action Buttons */}
-                      <div className={`flex items-center space-x-1 transition-opacity ${
-                        isHovered || isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-                        }`}>
-                        {isFolder ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onNavigateToFolder(item.fullPath);
-                            }}
-                            className="h-8 w-8 p-0 hover:bg-primary/10"
-                            aria-label={`Open ${item.name}`}
-                          >
-                            <Eye className="w-4 h-4 text-primary" />
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onDownloadFile(item);
-                            }}
-                            className="h-8 w-8 p-0 hover:bg-primary/10"
-                            aria-label={`Download ${item.name}`}
-                          >
-                            <Download className="w-4 h-4 text-primary" />
-                          </Button>
-                        )}
-                      </div>
+                    <div className="flex items-center justify-end space-x-1">
+                      {/* Always visible actions */}
+                      {isFolder ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onNavigateToFolder(item.fullPath);
+                          }}
+                          className="h-8 w-8 p-0 hover:bg-primary/10"
+                          title={`Open ${item.name}`}
+                        >
+                          <Eye className="w-4 h-4 text-primary" />
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDownloadFile(item);
+                          }}
+                          className="h-8 w-8 p-0 hover:bg-chart-1/10"
+                          title={`Download ${item.name}`}
+                        >
+                          <Download className="w-4 h-4 text-chart-1" />
+                        </Button>
+                      )}
 
-                      {/* More Actions Dropdown */}
+                      {/* Rename */}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          console.log('Rename clicked', item);
+                          onRenameItem?.(item);
+                        }}
+                        className="h-8 w-8 p-0 hover:bg-chart-2/10"
+                        title={`Rename ${item.name}`}
+                      >
+                        <Edit2 className="w-4 h-4 text-chart-2" />
+                      </Button>
+
+                      {/* Move */}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          console.log('Move clicked', item);
+                          onMoveItem?.(item);
+                        }}
+                        className="h-8 w-8 p-0 hover:bg-chart-5/10"
+                        title={`Move ${item.name}`}
+                      >
+                        <Move className="w-4 h-4 text-chart-5" />
+                      </Button>
+
+                      {/* Delete */}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteItems([item.fullPath]);
+                        }}
+                        className="h-8 w-8 p-0 hover:bg-destructive/10"
+                        title={`Delete ${item.name}`}
+                      >
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </Button>
+
+                      {/* More options dropdown */}
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
@@ -264,36 +313,41 @@ function FileTable({
                             size="sm"
                             onClick={(e) => e.stopPropagation()}
                             className="h-8 w-8 p-0 hover:bg-muted"
+                            title="More options"
                           >
                             <MoreHorizontal className="w-4 h-4" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">
-                          {isFolder ? (
+                          <DropdownMenuItem
+                            onClick={() => {
+                              console.log('Copy functionality coming soon');
+                            }}
+                            className="flex items-center space-x-2"
+                          >
+                            <Copy className="w-4 h-4" />
+                            <span>Copy to...</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              console.log('Properties functionality coming soon');
+                            }}
+                            className="flex items-center space-x-2"
+                          >
+                            <FileText className="w-4 h-4" />
+                            <span>Properties</span>
+                          </DropdownMenuItem>
+                          {!isFolder && (
                             <DropdownMenuItem
-                              onClick={() => onNavigateToFolder(item.fullPath)}
+                              onClick={() => {
+                                navigator.clipboard.writeText(window.location.origin + '/download/' + item.fullPath);
+                              }}
                               className="flex items-center space-x-2"
                             >
-                              <Eye className="w-4 h-4" />
-                              <span>Open Folder</span>
-                            </DropdownMenuItem>
-                          ) : (
-                            <DropdownMenuItem
-                              onClick={() => onDownloadFile(item)}
-                              className="flex items-center space-x-2"
-                            >
-                              <Download className="w-4 h-4" />
-                              <span>Download</span>
+                              <Copy className="w-4 h-4" />
+                              <span>Copy Link</span>
                             </DropdownMenuItem>
                           )}
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={() => onDeleteItems([item.fullPath])}
-                            className="flex items-center space-x-2 text-destructive focus:text-destructive"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                            <span>Delete</span>
-                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>

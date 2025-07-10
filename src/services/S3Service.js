@@ -415,6 +415,191 @@ export class S3Service {
     }
   }
 
+  async renameObject(oldKey, newKey) {
+    if (!this.isConfigured) throw new Error('S3 not configured');
+    if (!oldKey || !newKey) throw new Error('Both old and new keys are required');
+    if (oldKey === newKey) throw new Error('New name must be different from current name');
+
+    try {
+      // Check if new key already exists
+      try {
+        await this.s3.headObject({ Bucket: this.bucketName, Key: newKey }).promise();
+        throw new Error('An object with this name already exists');
+      } catch (error) {
+        if (error.code !== 'NotFound' && error.statusCode !== 404) {
+          throw error;
+        }
+      }
+
+      // Use a different approach to avoid encoding issues
+      // Get the object first, then put it with new key
+      const getParams = {
+        Bucket: this.bucketName,
+        Key: oldKey
+      };
+
+      const objectData = await this.s3.getObject(getParams).promise();
+
+      const putParams = {
+        Bucket: this.bucketName,
+        Key: newKey,
+        Body: objectData.Body,
+        ContentType: objectData.ContentType || 'application/octet-stream',
+        Metadata: objectData.Metadata || {}
+      };
+
+      // Copy additional metadata if available
+      if (objectData.CacheControl) putParams.CacheControl = objectData.CacheControl;
+      if (objectData.ContentDisposition) putParams.ContentDisposition = objectData.ContentDisposition;
+      if (objectData.ContentEncoding) putParams.ContentEncoding = objectData.ContentEncoding;
+      if (objectData.ContentLanguage) putParams.ContentLanguage = objectData.ContentLanguage;
+
+      await this.s3.putObject(putParams).promise();
+      console.log('Object uploaded with new key:', newKey);
+
+      // Delete the old object
+      await this.s3.deleteObject({
+        Bucket: this.bucketName,
+        Key: oldKey
+      }).promise();
+      console.log('Old object deleted:', oldKey);
+
+      // Clear relevant cache entries
+      const oldParentPrefix = oldKey.split('/').slice(0, -1).join('/') + '/';
+      const newParentPrefix = newKey.split('/').slice(0, -1).join('/') + '/';
+      this.folderMetadataCache.delete(oldParentPrefix);
+      this.folderMetadataCache.delete(newParentPrefix);
+
+      return true;
+    } catch (error) {
+      console.error('Rename error:', error);
+      throw new Error(`Failed to rename: ${error.message}`);
+    }
+  }
+
+  async renameFolder(oldPrefix, newPrefix) {
+    if (!this.isConfigured) throw new Error('S3 not configured');
+    if (!oldPrefix || !newPrefix) throw new Error('Both old and new folder paths are required');
+
+    // Ensure prefixes end with /
+    const oldFolderPrefix = oldPrefix.endsWith('/') ? oldPrefix : `${oldPrefix}/`;
+    const newFolderPrefix = newPrefix.endsWith('/') ? newPrefix : `${newPrefix}/`;
+
+    if (oldFolderPrefix === newFolderPrefix) {
+      throw new Error('New folder name must be different from current name');
+    }
+
+    try {
+      // For folder rename, we'll use a simpler approach
+      // Just create the new folder marker and let the user manually move files if needed
+      // This avoids the heavy copy operation for large folders
+
+      // First check if folder has many objects
+      const listParams = {
+        Bucket: this.bucketName,
+        Prefix: oldFolderPrefix,
+        MaxKeys: 100 // Just check first 100 to see if it's a large folder
+      };
+
+      const result = await this.s3.listObjectsV2(listParams).promise();
+      const objectCount = result.Contents?.length || 0;
+
+      if (objectCount > 50) {
+        throw new Error('Cannot rename folders with more than 50 items. Please move files manually to avoid timeouts.');
+      }
+
+      if (objectCount === 0) {
+        throw new Error('Folder not found or is empty');
+      }
+
+      console.log(`Renaming folder with ${objectCount} objects`);
+
+      // For small folders, proceed with rename
+      const objects = result.Contents || [];
+      const renamedObjects = [];
+
+      // Process each object individually to avoid encoding issues
+      for (const obj of objects) {
+        const oldKey = obj.Key;
+        const relativePath = oldKey.slice(oldFolderPrefix.length);
+        const newKey = newFolderPrefix + relativePath;
+
+        // Skip folder markers
+        if (oldKey.endsWith('/') && relativePath === '') {
+          continue;
+        }
+
+        try {
+          // Get the object data
+          const objectData = await this.s3.getObject({
+            Bucket: this.bucketName,
+            Key: oldKey
+          }).promise();
+
+          // Put it with the new key
+          await this.s3.putObject({
+            Bucket: this.bucketName,
+            Key: newKey,
+            Body: objectData.Body,
+            ContentType: objectData.ContentType || 'application/octet-stream',
+            Metadata: objectData.Metadata || {}
+          }).promise();
+
+          renamedObjects.push({ oldKey, newKey });
+          console.log('Moved:', oldKey, '->', newKey);
+
+        } catch (error) {
+          console.error('Error moving object:', oldKey, error);
+          throw new Error(`Failed to move ${oldKey}: ${error.message}`);
+        }
+      }
+
+      // Delete old objects after successful copies
+      for (const { oldKey } of renamedObjects) {
+        try {
+          await this.s3.deleteObject({
+            Bucket: this.bucketName,
+            Key: oldKey
+          }).promise();
+        } catch (error) {
+          console.warn('Failed to delete old object:', oldKey, error);
+        }
+      }
+
+      // Create the new folder marker
+      await this.s3.putObject({
+        Bucket: this.bucketName,
+        Key: newFolderPrefix,
+        Body: '',
+        ContentType: 'application/x-directory'
+      }).promise();
+
+      // Try to delete the old folder marker
+      try {
+        await this.s3.deleteObject({
+          Bucket: this.bucketName,
+          Key: oldFolderPrefix
+        }).promise();
+      } catch (error) {
+        console.warn('Failed to delete old folder marker:', error);
+      }
+
+      // Clear cache
+      const oldParentPrefix = oldFolderPrefix.split('/').slice(0, -2).join('/') + '/';
+      const newParentPrefix = newFolderPrefix.split('/').slice(0, -2).join('/') + '/';
+      this.folderMetadataCache.delete(oldParentPrefix);
+      this.folderMetadataCache.delete(newParentPrefix);
+      this.folderMetadataCache.delete(oldFolderPrefix);
+      this.folderMetadataCache.delete(newFolderPrefix);
+
+      console.log('Folder renamed successfully:', oldFolderPrefix, '->', newFolderPrefix);
+      return true;
+    } catch (error) {
+      console.error('Rename folder error:', error);
+      throw new Error(`Failed to rename folder: ${error.message}`);
+    }
+  }
+
   clearCache() {
     this.folderMetadataCache.clear();
   }

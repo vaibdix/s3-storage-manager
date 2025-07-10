@@ -5,6 +5,8 @@ import LoadingSpinner from '../common/LoadingSpinner'
 import FileTable from './FileTable'
 import UploadModal from './UploadModal'
 import NewFolderModal from './NewFolderModal'
+import RenameModal from './RenameModal'
+import MoveModal from './MoveModal'
 
 // shadcn-ui components
 import { Button } from '../ui/button'
@@ -18,7 +20,13 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
   const [showUpload, setShowUpload] = useState(false)
   const [uploadProgress, setUploadProgress] = useState({})
   const [showNewFolder, setShowNewFolder] = useState(false)
+  const [showRename, setShowRename] = useState(false)
+  const [showMove, setShowMove] = useState(false)
+  const [itemToRename, setItemToRename] = useState(null)
+  const [itemToMove, setItemToMove] = useState(null)
   const { loading, error, execute, clearError } = useAsyncOperation()
+  const { loading: renameLoading, execute: executeRename } = useAsyncOperation()
+  const { loading: moveLoading, execute: executeMove } = useAsyncOperation()
 
   const pathSegments = useMemo(
     () => (currentPath || '').split('/').filter(Boolean),
@@ -154,6 +162,71 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
   const selectAll = () =>
     setSelectedItems(new Set([...items.folders, ...items.files].map(i => i.fullPath)))
 
+  const handleRename = useCallback(
+    async (newName) => {
+      if (!itemToRename) return;
+
+      await executeRename(async () => {
+        const isFolder = itemToRename.type === 'folder';
+
+        if (isFolder) {
+          // For folders, construct the new full path
+          const oldPath = itemToRename.fullPath;
+          const parentPath = currentPath;
+          const newPath = parentPath + newName + '/';
+
+          await s3Service.renameFolder(oldPath, newPath);
+        } else {
+          // For files, construct the new full path
+          const oldPath = itemToRename.fullPath;
+          const newPath = currentPath + newName;
+
+          await s3Service.renameObject(oldPath, newPath);
+        }
+
+        setShowRename(false);
+        setItemToRename(null);
+        await loadItems();
+      });
+    },
+    [itemToRename, currentPath, s3Service, executeRename, loadItems]
+  );
+
+  const handleMove = useCallback(
+    async (destinationPath) => {
+      if (!itemToMove) return;
+
+      await executeMove(async () => {
+        const isFolder = itemToMove.type === 'folder';
+        const sourcePath = itemToMove.fullPath;
+
+        // Construct the new path
+        const newPath = destinationPath + itemToMove.name + (isFolder ? '/' : '');
+
+        if (isFolder) {
+          await s3Service.renameFolder(sourcePath, newPath);
+        } else {
+          await s3Service.renameObject(sourcePath, newPath);
+        }
+
+        setShowMove(false);
+        setItemToMove(null);
+        await loadItems();
+      });
+    },
+    [itemToMove, s3Service, executeMove, loadItems]
+  );
+
+  const openMoveModal = useCallback((item) => {
+    setItemToMove(item);
+    setShowMove(true);
+  }, []);
+
+  const openRenameModal = useCallback((item) => {
+    setItemToRename(item);
+    setShowRename(true);
+  }, []);
+
   const clearSelection = () => setSelectedItems(new Set())
 
   return (
@@ -265,6 +338,8 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
             onNavigateToFolder={navigateToSegment}
             onDownloadFile={downloadFile}
             onDeleteItems={deleteItems}
+            onRenameItem={openRenameModal}
+            onMoveItem={openMoveModal}
           />
         )}
 
@@ -315,6 +390,44 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
             isOpen={showNewFolder}
             onClose={() => setShowNewFolder(false)}
             onCreateFolder={createFolder}
+          />
+        </DialogContent>
+      </Dialog>
+      <Dialog open={showMove} onOpenChange={setShowMove}>
+        <DialogTrigger asChild>
+          <span />
+        </DialogTrigger>
+        <DialogContent>
+          <MoveModal
+            isOpen={showMove}
+            onClose={() => {
+              setShowMove(false);
+              setItemToMove(null);
+            }}
+            onMove={handleMove}
+            item={itemToMove}
+            s3Service={s3Service}
+            currentPath={currentPath}
+            isMoving={moveLoading}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showRename} onOpenChange={setShowRename}>
+        <DialogTrigger asChild>
+          <span />
+        </DialogTrigger>
+        <DialogContent>
+          <RenameModal
+            isOpen={showRename}
+            onClose={() => {
+              setShowRename(false);
+              setItemToRename(null);
+            }}
+            onRename={handleRename}
+            item={itemToRename}
+            currentPath={currentPath}
+            isRenaming={renameLoading}
           />
         </DialogContent>
       </Dialog>
