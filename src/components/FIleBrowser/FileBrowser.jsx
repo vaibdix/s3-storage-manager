@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { Upload, Plus, ArrowLeft, AlertTriangle, Trash2, Home } from 'lucide-react'
+import { Upload, Plus, ArrowLeft, AlertTriangle, Trash2, Home, Search, Filter, Share2 } from 'lucide-react'
 import useAsyncOperation from '../../hooks/useAsyncOperation'
 import LoadingSpinner from '../common/LoadingSpinner'
 import FileTable from './FileTable'
@@ -7,6 +7,7 @@ import UploadModal from './UploadModal'
 import NewFolderModal from './NewFolderModal'
 import RenameModal from './RenameModal'
 import MoveModal from './MoveModal'
+import ShareModal from './ShareModal'
 
 // shadcn-ui components
 import { Button } from '../ui/button'
@@ -14,30 +15,81 @@ import { Dialog, DialogTrigger, DialogContent } from '../ui/dialog'
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from '../ui/breadcrumb'
 
 export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
+  // All state declarations
   const [currentPath, setCurrentPath] = useState('')
   const [items, setItems] = useState({ folders: [], files: [] })
   const [selectedItems, setSelectedItems] = useState(new Set())
   const [showUpload, setShowUpload] = useState(false)
   const [uploadProgress, setUploadProgress] = useState({})
+  const [uploadStats, setUploadStats] = useState({})
   const [showNewFolder, setShowNewFolder] = useState(false)
   const [showRename, setShowRename] = useState(false)
   const [showMove, setShowMove] = useState(false)
+  const [showShare, setShowShare] = useState(false)
   const [itemToRename, setItemToRename] = useState(null)
   const [itemToMove, setItemToMove] = useState(null)
+  const [itemToShare, setItemToShare] = useState(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [filterType, setFilterType] = useState('all')
+
+  // Loading states
+  const [renameLoading, setRenameLoading] = useState(false)
+  const [moveLoading, setMoveLoading] = useState(false)
+  const [shareLoading, setShareLoading] = useState(false)
+
+  // Main async operations hook
   const { loading, error, execute, clearError } = useAsyncOperation()
-  const { loading: renameLoading, execute: executeRename } = useAsyncOperation()
-  const { loading: moveLoading, execute: executeMove } = useAsyncOperation()
 
   const pathSegments = useMemo(
     () => (currentPath || '').split('/').filter(Boolean),
     [currentPath]
   )
 
+  // File type detection
+  const getFileType = useCallback((fileName) => {
+    const ext = fileName.split('.').pop()?.toLowerCase();
+    if (['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'bmp'].includes(ext)) return 'image';
+    if (['mp4', 'avi', 'mkv', 'mov', 'wmv', 'flv', 'webm'].includes(ext)) return 'video';
+    if (['mp3', 'wav', 'flac', 'aac', 'ogg', 'wma'].includes(ext)) return 'audio';
+    if (['pdf'].includes(ext)) return 'pdf';
+    if (['doc', 'docx', 'txt', 'rtf', 'odt'].includes(ext)) return 'document';
+    if (['js', 'jsx', 'ts', 'tsx', 'html', 'css', 'py', 'java', 'cpp', 'c'].includes(ext)) return 'code';
+    if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return 'archive';
+    return 'other';
+  }, []);
+
+  // Filter and search items
+  const filteredItems = useMemo(() => {
+    let folders = [...items.folders];
+    let files = [...items.files];
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      folders = folders.filter(folder =>
+        folder.name.toLowerCase().includes(query)
+      );
+      files = files.filter(file =>
+        file.name.toLowerCase().includes(query)
+      );
+    }
+
+    // Apply type filter
+    if (filterType !== 'all') {
+      if (filterType === 'folder') {
+        files = []; // Only show folders
+      } else {
+        folders = []; // Hide folders for file type filters
+        files = files.filter(file => getFileType(file.name) === filterType);
+      }
+    }
+
+    return { folders, files };
+  }, [items, searchQuery, filterType, getFileType]);
+
   const loadItems = useCallback(async () => {
-    console.log('Loading items for path:', currentPath)
     await execute(async () => {
-      const result = await s3Service.listObjects(currentPath, true) // Always fetch folder metadata
-      console.log('Received items:', result)
+      const result = await s3Service.listObjects(currentPath, true)
       setItems(result)
       setSelectedItems(new Set())
     })
@@ -58,7 +110,7 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
 
   const navigateToRoot = () => setCurrentPath('')
 
-  // Fix: Navigate to specific segment with proper path construction
+  // Navigate to specific segment with proper path construction
   const navigateToSegment = (index) => {
     if (typeof index === 'number') {
       // Navigating via breadcrumb segment
@@ -79,19 +131,60 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
   const handleFileUpload = useCallback(
     async (files) => {
       for (const file of Array.from(files)) {
-        // Fix: Ensure proper path construction for uploads
         const key = currentPath + file.name
+        const startTime = Date.now()
+        let lastTime = startTime
+        let lastLoaded = 0
+
         setUploadProgress((p) => ({ ...p, [file.name]: 0 }))
+        setUploadStats((s) => ({
+          ...s,
+          [file.name]: {
+            speed: 0,
+            timeRemaining: 0,
+            startTime,
+            size: file.size
+          }
+        }))
+
         try {
-          await s3Service.uploadFile(file, key, (prog) =>
+          await s3Service.uploadFile(file, key, (prog, loaded = 0) => {
+            const now = Date.now()
+            const timeDiff = (now - lastTime) / 1000 // seconds
+            const dataDiff = loaded - lastLoaded
+
+            if (timeDiff > 0.5) { // Update every 500ms for smooth display
+              const speed = dataDiff / timeDiff // bytes per second
+              const totalTime = (now - startTime) / 1000
+              const avgSpeed = loaded / totalTime
+              const remaining = avgSpeed > 0 ? (file.size - loaded) / avgSpeed : 0
+
+              setUploadStats((s) => ({
+                ...s,
+                [file.name]: {
+                  ...s[file.name],
+                  speed: speed,
+                  timeRemaining: remaining,
+                  avgSpeed: avgSpeed
+                }
+              }))
+
+              lastTime = now
+              lastLoaded = loaded
+            }
+
             setUploadProgress((p) => ({ ...p, [file.name]: prog }))
-          )
+          })
         } catch (e) {
           console.error('Upload error:', e)
           alert(`Upload failed: ${e.message}`)
         } finally {
           setUploadProgress((p) => {
             const { [file.name]: _, ...rest } = p
+            return rest
+          })
+          setUploadStats((s) => {
+            const { [file.name]: _, ...rest } = s
             return rest
           })
         }
@@ -105,7 +198,6 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
   const createFolder = useCallback(
     async (folderName) => {
       await execute(async () => {
-        // Fix: Ensure proper folder path construction
         const folderPath = currentPath + folderName.trim() + '/'
         await s3Service.createFolder(folderPath)
         setShowNewFolder(false)
@@ -160,47 +252,48 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
     })
 
   const selectAll = () =>
-    setSelectedItems(new Set([...items.folders, ...items.files].map(i => i.fullPath)))
+    setSelectedItems(new Set([...filteredItems.folders, ...filteredItems.files].map(i => i.fullPath)))
 
   const handleRename = useCallback(
     async (newName) => {
       if (!itemToRename) return;
 
-      await executeRename(async () => {
+      setRenameLoading(true);
+      try {
         const isFolder = itemToRename.type === 'folder';
 
         if (isFolder) {
-          // For folders, construct the new full path
           const oldPath = itemToRename.fullPath;
           const parentPath = currentPath;
           const newPath = parentPath + newName + '/';
-
           await s3Service.renameFolder(oldPath, newPath);
         } else {
-          // For files, construct the new full path
           const oldPath = itemToRename.fullPath;
           const newPath = currentPath + newName;
-
           await s3Service.renameObject(oldPath, newPath);
         }
 
         setShowRename(false);
         setItemToRename(null);
         await loadItems();
-      });
+      } catch (error) {
+        console.error('Rename error:', error);
+        alert(`Rename failed: ${error.message}`);
+      } finally {
+        setRenameLoading(false);
+      }
     },
-    [itemToRename, currentPath, s3Service, executeRename, loadItems]
+    [itemToRename, currentPath, s3Service, loadItems]
   );
 
   const handleMove = useCallback(
     async (destinationPath) => {
       if (!itemToMove) return;
 
-      await executeMove(async () => {
+      setMoveLoading(true);
+      try {
         const isFolder = itemToMove.type === 'folder';
         const sourcePath = itemToMove.fullPath;
-
-        // Construct the new path
         const newPath = destinationPath + itemToMove.name + (isFolder ? '/' : '');
 
         if (isFolder) {
@@ -212,9 +305,14 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
         setShowMove(false);
         setItemToMove(null);
         await loadItems();
-      });
+      } catch (error) {
+        console.error('Move error:', error);
+        alert(`Move failed: ${error.message}`);
+      } finally {
+        setMoveLoading(false);
+      }
     },
-    [itemToMove, s3Service, executeMove, loadItems]
+    [itemToMove, s3Service, loadItems]
   );
 
   const openMoveModal = useCallback((item) => {
@@ -225,6 +323,11 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
   const openRenameModal = useCallback((item) => {
     setItemToRename(item);
     setShowRename(true);
+  }, []);
+
+  const openShareModal = useCallback((item) => {
+    setItemToShare(item);
+    setShowShare(true);
   }, []);
 
   const clearSelection = () => setSelectedItems(new Set())
@@ -265,42 +368,96 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
 
       {/* Toolbar */}
       <div className="bg-card border-b border-border py-4">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row gap-4 sm:justify-between">
-          <div className="flex flex-wrap gap-2">
-            {currentPath && (
-              <Button onClick={navigateUp} variant="outline" size="sm">
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back
+        <div className="max-w-7xl mx-auto px-4 space-y-4">
+          {/* Top row - Action buttons */}
+          <div className="flex flex-col sm:flex-row gap-4 sm:justify-between">
+            <div className="flex flex-wrap gap-2">
+              {currentPath && (
+                <Button onClick={navigateUp} variant="outline" size="sm">
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Back
+                </Button>
+              )}
+              <Button onClick={() => setShowUpload(true)} size="sm">
+                <Upload className="w-4 h-4 mr-2" />
+                Upload Files
               </Button>
-            )}
-            <Button onClick={() => setShowUpload(true)} size="sm">
-              <Upload className="w-4 h-4 mr-2" />
-              Upload Files
-            </Button>
-            <Button variant="secondary" onClick={() => setShowNewFolder(true)} size="sm">
-              <Plus className="w-4 h-4 mr-2" />
-              New Folder
-            </Button>
+              <Button variant="secondary" onClick={() => setShowNewFolder(true)} size="sm">
+                <Plus className="w-4 h-4 mr-2" />
+                New Folder
+              </Button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {(filteredItems.folders.length || filteredItems.files.length) > 0 && (
+                <>
+                  <Button variant="link" onClick={selectAll} size="sm">
+                    Select All
+                  </Button>
+                  {selectedItems.size > 0 && (
+                    <Button variant="link" onClick={clearSelection} size="sm">
+                      Clear Selection
+                    </Button>
+                  )}
+                </>
+              )}
+              {selectedItems.size > 0 && (
+                <Button variant="destructive" onClick={() => deleteItems()} size="sm">
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete ({selectedItems.size})
+                </Button>
+              )}
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            {(items.folders.length || items.files.length) > 0 && (
-              <>
-                <Button variant="link" onClick={selectAll} size="sm">
-                  Select All
-                </Button>
-                {selectedItems.size > 0 && (
-                  <Button variant="link" onClick={clearSelection} size="sm">
-                    Clear Selection
-                  </Button>
-                )}
-              </>
-            )}
-            {selectedItems.size > 0 && (
-              <Button variant="destructive" onClick={() => deleteItems()} size="sm">
-                <Trash2 className="w-4 h-4 mr-2" />
-                Delete ({selectedItems.size})
-              </Button>
+          {/* Bottom row - Search and Filter */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            {/* Search */}
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search files and folders..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {/* Filter */}
+            <div className="flex items-center space-x-2">
+              <Filter className="w-4 h-4 text-muted-foreground" />
+              <select
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                className="px-3 py-2 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              >
+                <option value="all">All Types</option>
+                <option value="folder">📁 Folders</option>
+                <option value="image">🖼️ Images</option>
+                <option value="video">🎥 Videos</option>
+                <option value="audio">🎵 Audio</option>
+                <option value="document">📄 Documents</option>
+                <option value="pdf">📕 PDF</option>
+                <option value="code">💻 Code</option>
+                <option value="archive">📦 Archives</option>
+                <option value="other">📎 Other</option>
+              </select>
+            </div>
+
+            {/* Results info */}
+            {(searchQuery || filterType !== 'all') && (
+              <div className="text-sm text-muted-foreground self-center">
+                {filteredItems.folders.length + filteredItems.files.length} of {items.folders.length + items.files.length} items
+              </div>
             )}
           </div>
         </div>
@@ -332,7 +489,7 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
           <LoadingSpinner centered message="Loading files..." />
         ) : (
           <FileTable
-            items={items}
+            items={filteredItems}
             selectedItems={selectedItems}
             onToggleSelection={toggleSelection}
             onNavigateToFolder={navigateToSegment}
@@ -340,6 +497,7 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
             onDeleteItems={deleteItems}
             onRenameItem={openRenameModal}
             onMoveItem={openMoveModal}
+            onShareItem={openShareModal}
           />
         )}
 
@@ -349,20 +507,48 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
             <h3 className="font-medium mb-3 text-foreground">
               Uploading ({Object.keys(uploadProgress).length})
             </h3>
-            {Object.entries(uploadProgress).map(([name, pct]) => (
-              <div key={name} className="mb-2">
-                <div className="flex justify-between text-sm text-muted-foreground mb-1">
-                  <span className="truncate">{name}</span>
-                  <span>{pct}%</span>
+            {Object.entries(uploadProgress).map(([name, pct]) => {
+              const stats = uploadStats[name] || {}
+              const formatSpeed = (bytesPerSec) => {
+                if (bytesPerSec < 1024) return `${bytesPerSec.toFixed(0)} B/s`
+                if (bytesPerSec < 1024 * 1024) return `${(bytesPerSec / 1024).toFixed(1)} KB/s`
+                return `${(bytesPerSec / (1024 * 1024)).toFixed(1)} MB/s`
+              }
+              const formatTime = (seconds) => {
+                if (seconds < 60) return `${seconds.toFixed(0)}s`
+                if (seconds < 3600) return `${(seconds / 60).toFixed(1)}m`
+                return `${(seconds / 3600).toFixed(1)}h`
+              }
+
+              return (
+                <div key={name} className="mb-3 last:mb-0">
+                  <div className="flex justify-between text-sm text-muted-foreground mb-1">
+                    <span className="truncate flex-1 mr-2">{name}</span>
+                    <div className="flex items-center space-x-3 text-xs">
+                      {stats.speed > 0 && (
+                        <span className="text-primary">{formatSpeed(stats.avgSpeed || stats.speed)}</span>
+                      )}
+                      <span>{pct}%</span>
+                      {stats.timeRemaining > 0 && pct < 100 && (
+                        <span className="text-chart-1">{formatTime(stats.timeRemaining)} left</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="h-2 bg-muted rounded overflow-hidden">
+                    <div
+                      className="bg-primary h-full rounded transition-all duration-300"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  {stats.size && (
+                    <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                      <span>{((stats.size * pct) / 100 / 1024 / 1024).toFixed(1)} MB of {(stats.size / 1024 / 1024).toFixed(1)} MB</span>
+                      {pct === 100 && <span className="text-green-600">✓ Complete</span>}
+                    </div>
+                  )}
                 </div>
-                <div className="h-2 bg-muted rounded overflow-hidden">
-                  <div
-                    className="bg-primary h-full rounded transition-all duration-300"
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </main>
@@ -393,44 +579,42 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
           />
         </DialogContent>
       </Dialog>
-      <Dialog open={showMove} onOpenChange={setShowMove}>
-        <DialogTrigger asChild>
-          <span />
-        </DialogTrigger>
-        <DialogContent>
-          <MoveModal
-            isOpen={showMove}
-            onClose={() => {
-              setShowMove(false);
-              setItemToMove(null);
-            }}
-            onMove={handleMove}
-            item={itemToMove}
-            s3Service={s3Service}
-            currentPath={currentPath}
-            isMoving={moveLoading}
-          />
-        </DialogContent>
-      </Dialog>
 
-      <Dialog open={showRename} onOpenChange={setShowRename}>
-        <DialogTrigger asChild>
-          <span />
-        </DialogTrigger>
-        <DialogContent>
-          <RenameModal
-            isOpen={showRename}
-            onClose={() => {
-              setShowRename(false);
-              setItemToRename(null);
-            }}
-            onRename={handleRename}
-            item={itemToRename}
-            currentPath={currentPath}
-            isRenaming={renameLoading}
-          />
-        </DialogContent>
-      </Dialog>
+      <ShareModal
+        isOpen={showShare}
+        onClose={() => {
+          setShowShare(false);
+          setItemToShare(null);
+        }}
+        item={itemToShare}
+        s3Service={s3Service}
+        isGenerating={shareLoading}
+      />
+
+      <MoveModal
+        isOpen={showMove}
+        onClose={() => {
+          setShowMove(false);
+          setItemToMove(null);
+        }}
+        onMove={handleMove}
+        item={itemToMove}
+        s3Service={s3Service}
+        currentPath={currentPath}
+        isMoving={moveLoading}
+      />
+
+      <RenameModal
+        isOpen={showRename}
+        onClose={() => {
+          setShowRename(false);
+          setItemToRename(null);
+        }}
+        onRename={handleRename}
+        item={itemToRename}
+        currentPath={currentPath}
+        isRenaming={renameLoading}
+      />
     </div>
   )
 })

@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from "react";
 import {
-  Download, Eye, Folder, Trash2, MoreHorizontal, FileText, Image, Archive, Music, Video, Code, FileIcon, Loader2, Edit2, Move, Copy
+  Download, Eye, Folder, Trash2, MoreHorizontal, FileText, Image, Archive, Music, Video, Code, FileIcon, Loader2, Edit2, Move, Copy, Share2
 } from "lucide-react";
 import { Button } from "../ui/button";
 import {
@@ -36,9 +36,9 @@ function FileTable({
   onDownloadFile,
   onDeleteItems,
   onRenameItem,
-  onMoveItem
+  onMoveItem,
+  onShareItem
 }) {
-  console.log('FileTable props:', { onRenameItem, onMoveItem }); // Debug log
   const [hoveredRow, setHoveredRow] = useState(null);
 
   const handleRowClick = useCallback(
@@ -267,7 +267,6 @@ function FileTable({
                         size="sm"
                         onClick={(e) => {
                           e.stopPropagation();
-                          console.log('Rename clicked', item);
                           onRenameItem?.(item);
                         }}
                         className="h-8 w-8 p-0 hover:bg-chart-2/10"
@@ -282,13 +281,26 @@ function FileTable({
                         size="sm"
                         onClick={(e) => {
                           e.stopPropagation();
-                          console.log('Move clicked', item);
                           onMoveItem?.(item);
                         }}
                         className="h-8 w-8 p-0 hover:bg-chart-5/10"
                         title={`Move ${item.name}`}
                       >
                         <Move className="w-4 h-4 text-chart-5" />
+                      </Button>
+
+                      {/* Share */}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onShareItem?.(item);
+                        }}
+                        className="h-8 w-8 p-0 hover:bg-primary/10"
+                        title={`Share ${item.name}`}
+                      >
+                        <Share2 className="w-4 h-4 text-primary" />
                       </Button>
 
                       {/* Delete */}
@@ -320,8 +332,15 @@ function FileTable({
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">
                           <DropdownMenuItem
+                            onClick={() => onShareItem?.(item)}
+                            className="flex items-center space-x-2"
+                          >
+                            <Share2 className="w-4 h-4" />
+                            <span>Share Link</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
                             onClick={() => {
-                              console.log('Copy functionality coming soon');
+                              // TODO: Implement copy functionality
                             }}
                             className="flex items-center space-x-2"
                           >
@@ -330,7 +349,7 @@ function FileTable({
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => {
-                              console.log('Properties functionality coming soon');
+                              // TODO: Implement properties functionality
                             }}
                             className="flex items-center space-x-2"
                           >
@@ -345,7 +364,7 @@ function FileTable({
                               className="flex items-center space-x-2"
                             >
                               <Copy className="w-4 h-4" />
-                              <span>Copy Link</span>
+                              <span>Copy Path</span>
                             </DropdownMenuItem>
                           )}
                         </DropdownMenuContent>

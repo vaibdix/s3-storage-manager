@@ -9,6 +9,7 @@ export class S3Service {
     this.bucketName = '';
     this.isConfigured = false;
     this.folderMetadataCache = new Map(); // Cache for folder metadata
+    this.activeSharedLinks = new Map(); // Track active shared links
   }
 
   async configure(config) {
@@ -138,14 +139,7 @@ export class S3Service {
     };
 
     try {
-      console.log('S3 listObjects params:', params);
       const result = await this.s3.listObjectsV2(params).promise();
-      console.log('S3 raw response:', {
-        prefix: cleanPrefix,
-        commonPrefixes: result.CommonPrefixes,
-        contents: result.Contents,
-        isTruncated: result.IsTruncated
-      });
 
       // Process folders from CommonPrefixes
       let folders = (result.CommonPrefixes || [])
@@ -215,8 +209,6 @@ export class S3Service {
           };
         });
 
-      console.log('Processed result:', { folders, files });
-
       return { folders, files };
     } catch (error) {
       console.error('List objects error:', error);
@@ -251,13 +243,14 @@ export class S3Service {
     return this.s3.upload(params)
       .on('httpUploadProgress', (evt) => {
         const progress = Math.round((evt.loaded * 100) / evt.total);
-        onProgress?.(progress);
+        onProgress?.(progress, evt.loaded);
       })
       .promise();
   }
 
   async multipartUpload(file, key, onProgress) {
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    let totalUploaded = 0;
 
     const createParams = {
       Bucket: this.bucketName,
@@ -289,8 +282,9 @@ export class S3Service {
           PartNumber: i + 1
         });
 
-        const progress = Math.round(((i + 1) * 100) / totalChunks);
-        onProgress?.(progress);
+        totalUploaded += chunk.size;
+        const progress = Math.round((totalUploaded * 100) / file.size);
+        onProgress?.(progress, totalUploaded);
       }
 
       const completeParams = {
@@ -385,6 +379,101 @@ export class S3Service {
       console.error('Generate download URL error:', error);
       throw new Error(`Failed to generate download URL: ${error.message}`);
     }
+  }
+
+  generateShareUrl(key, expiresInSeconds = 3600) {
+    if (!this.isConfigured) throw new Error('S3 not configured');
+    if (!key) throw new Error('Object key is required');
+
+    try {
+      const url = this.s3.getSignedUrl('getObject', {
+        Bucket: this.bucketName,
+        Key: key,
+        Expires: expiresInSeconds,
+        ResponseContentDisposition: 'inline' // Display in browser instead of download
+      });
+
+      // Track the shared link
+      const linkId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+      const expiryDate = new Date(Date.now() + (expiresInSeconds * 1000));
+
+      this.activeSharedLinks.set(linkId, {
+        id: linkId,
+        key: key,
+        url: url,
+        fileName: key.split('/').pop() || key,
+        fullPath: key,
+        createdAt: new Date(),
+        expiresAt: expiryDate,
+        expiresInSeconds: expiresInSeconds,
+        isExpired: false
+      });
+
+      // Auto-cleanup expired links
+      setTimeout(() => {
+        if (this.activeSharedLinks.has(linkId)) {
+          const link = this.activeSharedLinks.get(linkId);
+          link.isExpired = true;
+        }
+      }, expiresInSeconds * 1000);
+
+      return { url, linkId };
+    } catch (error) {
+      console.error('Generate share URL error:', error);
+      throw new Error(`Failed to generate share URL: ${error.message}`);
+    }
+  }
+
+  getAllActiveLinks() {
+    const now = new Date();
+    const links = Array.from(this.activeSharedLinks.values())
+      .map(link => ({
+        ...link,
+        isExpired: link.isExpired || now > link.expiresAt
+      }))
+      .sort((a, b) => b.createdAt - a.createdAt);
+
+    return links;
+  }
+
+  revokeSharedLink(linkId) {
+    if (this.activeSharedLinks.has(linkId)) {
+      this.activeSharedLinks.delete(linkId);
+      return true;
+    }
+    return false;
+  }
+
+  revokeAllSharedLinks() {
+    const count = this.activeSharedLinks.size;
+    this.activeSharedLinks.clear();
+    return count;
+  }
+
+  revokeExpiredLinks() {
+    const now = new Date();
+    let count = 0;
+
+    for (const [linkId, link] of this.activeSharedLinks.entries()) {
+      if (link.isExpired || now > link.expiresAt) {
+        this.activeSharedLinks.delete(linkId);
+        count++;
+      }
+    }
+
+    return count;
+  }
+
+  generateFolderShareUrls(folderPrefix, expiresInSeconds = 3600) {
+    // For folders, we'll generate individual URLs for each file
+    // This is a limitation of S3 - folders can't be directly shared
+    return this.listObjects(folderPrefix, false).then(result => {
+      const shareUrls = {};
+      result.files.forEach(file => {
+        shareUrls[file.name] = this.generateShareUrl(file.fullPath, expiresInSeconds);
+      });
+      return shareUrls;
+    });
   }
 
   // Debug method to see raw S3 response
@@ -609,5 +698,6 @@ export class S3Service {
     this.bucketName = '';
     this.isConfigured = false;
     this.folderMetadataCache.clear();
+    this.activeSharedLinks.clear();
   }
 }
