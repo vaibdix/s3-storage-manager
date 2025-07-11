@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { Upload, Plus, ArrowLeft, AlertTriangle, Trash2, Home, Search, Filter, Share2 } from 'lucide-react'
+import { Upload, Plus, ArrowLeft, AlertTriangle, Trash2, Home, Search, Filter } from 'lucide-react'
 import useAsyncOperation from '../../hooks/useAsyncOperation'
 import LoadingSpinner from '../common/LoadingSpinner'
 import FileTable from './FileTable'
 import UploadModal from './UploadModal'
-import NewFolderModal from './NewFolderModal'
-import RenameModal from './RenameModal'
+import NewFolderModal from '../modal/NewFolderModal'
+import RenameModal from '../modal/RenameModal'
 import MoveModal from './MoveModal'
-import ShareModal from './ShareModal'
+import ShareModal from '../modal/ShareModal'
 
 // shadcn-ui components
 import { Button } from '../ui/button'

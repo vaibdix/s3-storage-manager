@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Cloud, RefreshCw, LogOut, Link } from "lucide-react";
 import { Button } from "../ui/button";
 import { ModeToggle } from "../mode-toggle";
-import SharedLinksModal from "../FIleBrowser/SharedLinksModal";
+import SharedLinksModal from "../modal/SharedLinksModal";
 
 function Header({ isConnected, s3Service, onRefresh, onDisconnect, isRefreshing }) {
   const [showSharedLinks, setShowSharedLinks] = useState(false);
