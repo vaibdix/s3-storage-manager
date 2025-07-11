@@ -1,7 +1,8 @@
+// App.jsx
 import React, { useState, useCallback } from "react";
 import { ThemeProvider } from "./components/theme-provider";
 import S3Configuration from "./components/S3Configuration/S3Configuration";
-import { FileBrowser } from "./components/FIleBrowser/FileBrowser";
+import FileBrowser from "./components/FileBrowser/FileBrowser"; // Fixed import name
 import { S3Service } from "./services/S3Service";
 
 // Layout
@@ -42,7 +43,7 @@ function App() {
   }, []);
 
   return (
-    <ErrorBoundary >
+    <ErrorBoundary>
       <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
         <div className="min-h-screen bg-background flex flex-col">
           <Header

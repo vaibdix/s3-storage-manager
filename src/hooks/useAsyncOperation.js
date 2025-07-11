@@ -1,21 +1,33 @@
-import { useState, useCallback } from 'react';
+// hooks/useAsyncOperation.js
+import { useState, useCallback, useRef } from 'react';
 
 const useAsyncOperation = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const abortControllerRef = useRef(null);
 
-  const execute = useCallback(async (asyncFunction) => {
+  const execute = useCallback(async (asyncFunction, options = {}) => {
+    const { abortable = false } = options;
+
     try {
       setLoading(true);
       setError(null);
-      const result = await asyncFunction();
+
+      if (abortable) {
+        abortControllerRef.current = new AbortController();
+      }
+
+      const result = await asyncFunction(abortControllerRef.current?.signal);
       return result;
     } catch (err) {
-      const errorMessage = err.message || 'An unexpected error occurred';
-      setError(errorMessage);
+      if (err.name !== 'AbortError') {
+        const errorMessage = err.message || 'An unexpected error occurred';
+        setError(errorMessage);
+      }
       throw err;
     } finally {
       setLoading(false);
+      abortControllerRef.current = null;
     }
   }, []);
 
@@ -26,6 +38,13 @@ const useAsyncOperation = () => {
   const reset = useCallback(() => {
     setLoading(false);
     setError(null);
+    abortControllerRef.current = null;
+  }, []);
+
+  const abort = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
   }, []);
 
   return {
@@ -33,7 +52,8 @@ const useAsyncOperation = () => {
     error,
     execute,
     clearError,
-    reset
+    reset,
+    abort
   };
 };
 

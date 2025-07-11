@@ -1,57 +1,127 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback } from 'react';
+
+const FILE_TYPE_EXTENSIONS = {
+  image: ['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'bmp', 'ico', 'tiff'],
+  video: ['mp4', 'avi', 'mkv', 'mov', 'wmv', 'flv', 'webm', 'm4v', '3gp'],
+  audio: ['mp3', 'wav', 'flac', 'aac', 'ogg', 'wma', 'm4a', 'opus'],
+  pdf: ['pdf'],
+  document: ['doc', 'docx', 'txt', 'rtf', 'odt', 'pages', 'md', 'tex'],
+  spreadsheet: ['xls', 'xlsx', 'csv', 'ods', 'numbers'],
+  presentation: ['ppt', 'pptx', 'odp', 'key'],
+  code: ['js', 'jsx', 'ts', 'tsx', 'html', 'css', 'py', 'java', 'cpp', 'c', 'php', 'rb', 'go', 'rs', 'swift'],
+  archive: ['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz']
+};
 
 export const useFilteredItems = (items) => {
-  const [searchQuery, setSearchQuery] = useState('')
-  const [filterType, setFilterType] = useState('all')
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterType, setFilterType] = useState('all');
+  const [sortBy, setSortBy] = useState('name');
+  const [sortOrder, setSortOrder] = useState('asc');
 
-  // File type detection
   const getFileType = useCallback((fileName) => {
     const ext = fileName.split('.').pop()?.toLowerCase();
-    if (['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'bmp'].includes(ext)) return 'image';
-    if (['mp4', 'avi', 'mkv', 'mov', 'wmv', 'flv', 'webm'].includes(ext)) return 'video';
-    if (['mp3', 'wav', 'flac', 'aac', 'ogg', 'wma'].includes(ext)) return 'audio';
-    if (['pdf'].includes(ext)) return 'pdf';
-    if (['doc', 'docx', 'txt', 'rtf', 'odt'].includes(ext)) return 'document';
-    if (['js', 'jsx', 'ts', 'tsx', 'html', 'css', 'py', 'java', 'cpp', 'c'].includes(ext)) return 'code';
-    if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) return 'archive';
+    if (!ext) return 'other';
+
+    for (const [type, extensions] of Object.entries(FILE_TYPE_EXTENSIONS)) {
+      if (extensions.includes(ext)) {
+        return type;
+      }
+    }
     return 'other';
   }, []);
 
-  // Filter and search items
-  const filteredItems = useMemo(() => {
-    let folders = [...items.folders];
-    let files = [...items.files];
+  const searchItems = useCallback((items, query) => {
+    if (!query.trim()) return items;
 
-    // Apply search filter
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      folders = folders.filter(folder =>
-        folder.name.toLowerCase().includes(query)
-      );
-      files = files.filter(file =>
-        file.name.toLowerCase().includes(query)
-      );
+    const searchTerms = query.toLowerCase().split(' ').filter(term => term.length > 0);
+
+    return items.filter(item => {
+      const name = item.name.toLowerCase();
+      return searchTerms.every(term => name.includes(term));
+    });
+  }, []);
+
+  const filterItemsByType = useCallback((folders, files, type) => {
+    if (type === 'all') {
+      return { folders, files };
     }
 
-    // Apply type filter
-    if (filterType !== 'all') {
-      if (filterType === 'folder') {
-        files = []; // Only show folders
-      } else {
-        folders = []; // Hide folders for file type filters
-        files = files.filter(file => getFileType(file.name) === filterType);
+    if (type === 'folder') {
+      return { folders, files: [] };
+    }
+
+    const filteredFiles = files.filter(file => getFileType(file.name) === type);
+    return { folders: [], files: filteredFiles };
+  }, [getFileType]);
+
+  const sortItems = useCallback((items, sortBy, sortOrder) => {
+    return [...items].sort((a, b) => {
+      let comparison = 0;
+
+      switch (sortBy) {
+        case 'name':
+          comparison = a.name.localeCompare(b.name, undefined, { numeric: true });
+          break;
+        case 'size':
+          const sizeA = a.size || 0;
+          const sizeB = b.size || 0;
+          comparison = sizeA - sizeB;
+          break;
+        case 'date':
+          const dateA = a.lastModified ? new Date(a.lastModified) : new Date(0);
+          const dateB = b.lastModified ? new Date(b.lastModified) : new Date(0);
+          comparison = dateA - dateB;
+          break;
+        default:
+          comparison = 0;
       }
-    }
+
+      return sortOrder === 'desc' ? -comparison : comparison;
+    });
+  }, []);
+
+  const filteredItems = useMemo(() => {
+    let folders = [...(items.folders || [])];
+    let files = [...(items.files || [])];
+
+    folders = searchItems(folders, searchQuery);
+    files = searchItems(files, searchQuery);
+
+    const filtered = filterItemsByType(folders, files, filterType);
+    folders = filtered.folders;
+    files = filtered.files;
+
+    folders = sortItems(folders, sortBy, sortOrder);
+    files = sortItems(files, sortBy, sortOrder);
 
     return { folders, files };
-  }, [items, searchQuery, filterType, getFileType]);
+  }, [items, searchQuery, filterType, sortBy, sortOrder, searchItems, filterItemsByType, sortItems]);
+
+  const clearFilters = useCallback(() => {
+    setSearchQuery('');
+    setFilterType('all');
+    setSortBy('name');
+    setSortOrder('asc');
+  }, []);
+
+  const getFilteredCount = useCallback(() => {
+    const total = (items.folders?.length || 0) + (items.files?.length || 0);
+    const filtered = filteredItems.folders.length + filteredItems.files.length;
+    return { total, filtered };
+  }, [items, filteredItems]);
 
   return {
     searchQuery,
     setSearchQuery,
     filterType,
     setFilterType,
+    sortBy,
+    setSortBy,
+    sortOrder,
+    setSortOrder,
     filteredItems,
-    getFileType
-  }
-}
+    getFileType,
+    clearFilters,
+    getFilteredCount
+  };
+};
