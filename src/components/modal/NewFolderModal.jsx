@@ -1,9 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { X, Folder } from 'lucide-react';
-
-// FIXED: Import the validation function from utils
 import { validateFolderName } from '../../utils/validators';
-
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose, } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -17,26 +14,18 @@ function NewFolderModal({
 }) {
   const [folderName, setFolderName] = useState('');
   const [error, setError] = useState('');
-
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     setError('');
-
     const trimmedName = folderName.trim();
-
     if (!trimmedName) {
       setError('Folder name cannot be empty');
       return;
     }
-
     try {
-      // Validate folder name
       validateFolderName(trimmedName);
-
       console.log('Creating folder with name:', trimmedName);
       await onCreateFolder(trimmedName);
-
-      // Only clear if successful and modal closes
       setFolderName('');
     } catch (err) {
       console.error('Folder creation error:', err);
@@ -55,8 +44,6 @@ function NewFolderModal({
   const handleInputChange = useCallback((e) => {
     const value = e.target.value;
     setFolderName(value);
-
-    // Clear error when user starts typing
     if (error) {
       setError('');
     }
@@ -69,17 +56,14 @@ function NewFolderModal({
     }
   }, [isOpen]);
 
-  // Auto-focus input when modal opens
   useEffect(() => {
     if (isOpen) {
-      // Small delay to ensure modal is rendered
       const timer = setTimeout(() => {
         const input = document.getElementById('folderName');
         if (input) {
           input.focus();
         }
       }, 100);
-
       return () => clearTimeout(timer);
     }
   }, [isOpen]);

@@ -1,12 +1,9 @@
-// services/ShikiService.js - Fixed version with Shiki v3.0+ API
 class ShikiService {
   constructor() {
     this.highlighter = null;
     this.isLoading = false;
     this.isLoaded = false;
   }
-
-  // Language detection from file extension
   getLanguageFromFileName(fileName) {
     const ext = fileName.split('.').pop()?.toLowerCase();
     const langMap = {
@@ -81,35 +78,23 @@ class ShikiService {
 
     return langMap[ext] || 'text';
   }
-
-  // Initialize Shiki highlighter with v3.0+ API
   async initialize(theme = 'github-dark') {
     if (this.isLoaded && this.highlighter) {
       return this.highlighter;
     }
-
     if (this.isLoading) {
-      // Wait for existing initialization
       while (this.isLoading) {
         await new Promise(resolve => setTimeout(resolve, 100));
       }
       return this.highlighter;
     }
-
     try {
       this.isLoading = true;
-
-      // Dynamic import of Shiki with v3.0+ API
       const shikiModule = await import('shiki');
-
-      // Use createHighlighter instead of getHighlighter
       const createHighlighter = shikiModule.createHighlighter || shikiModule.default?.createHighlighter;
-
       if (!createHighlighter) {
         throw new Error('createHighlighter not found in shiki module');
       }
-
-      // Create highlighter with common languages and themes
       this.highlighter = await createHighlighter({
         themes: [
           'github-dark',
@@ -146,7 +131,6 @@ class ShikiService {
           'text'
         ]
       });
-
       this.isLoaded = true;
       return this.highlighter;
 
@@ -157,25 +141,17 @@ class ShikiService {
       this.isLoading = false;
     }
   }
-
-  // Highlight code with Shiki v3.0+ API
   async highlightCode(code, fileName, theme = 'github-dark') {
     try {
-      // Ensure highlighter is initialized
       const highlighter = await this.initialize(theme);
-
       if (!highlighter) {
         throw new Error('Highlighter not available');
       }
-
       const language = this.getLanguageFromFileName(fileName);
-
-      // Generate highlighted HTML using v3.0+ API
       const html = highlighter.codeToHtml(code, {
         lang: language,
         theme: theme
       });
-
       return {
         success: true,
         html,
@@ -185,8 +161,6 @@ class ShikiService {
 
     } catch (error) {
       console.error('Shiki highlighting error:', error);
-
-      // Return fallback HTML with basic styling
       return {
         success: false,
         html: this.getFallbackHTML(code, fileName),
@@ -197,30 +171,22 @@ class ShikiService {
     }
   }
 
-  // Alternative method using shorthand function (v3.0+ feature)
   async highlightCodeShorthand(code, fileName, theme = 'github-dark') {
     try {
-      // Dynamic import of shorthand function
       const { codeToHtml } = await import('shiki');
-
       const language = this.getLanguageFromFileName(fileName);
-
-      // Use shorthand function - no initialization needed
       const html = await codeToHtml(code, {
         lang: language,
         theme: theme
       });
-
       return {
         success: true,
         html,
         language,
         theme
       };
-
     } catch (error) {
       console.error('Shiki shorthand highlighting error:', error);
-
       return {
         success: false,
         html: this.getFallbackHTML(code, fileName),
@@ -230,20 +196,14 @@ class ShikiService {
       };
     }
   }
-
-  // Fallback HTML when Shiki fails
   getFallbackHTML(code, fileName) {
     const language = this.getLanguageFromFileName(fileName);
-
-    // Escape HTML entities
     const escapedCode = code
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
-
-    // Return styled fallback with proper scrolling - let parent handle overflow
     return `
       <pre style="
         margin: 0;
@@ -261,8 +221,6 @@ class ShikiService {
       "><code data-language="${language}">${escapedCode}</code></pre>
     `;
   }
-
-  // Get available themes
   getAvailableThemes() {
     return [
       { value: 'github-dark', label: 'GitHub Dark' },
@@ -274,8 +232,6 @@ class ShikiService {
       { value: 'solarized-light', label: 'Solarized Light' }
     ];
   }
-
-  // Get supported languages
   getSupportedLanguages() {
     return [
       'javascript', 'typescript', 'tsx', 'jsx', 'html', 'css', 'scss',
@@ -283,23 +239,15 @@ class ShikiService {
       'json', 'yaml', 'xml', 'markdown', 'sql', 'bash', 'text'
     ];
   }
-
-  // Check if language is supported
   isLanguageSupported(fileName) {
     const language = this.getLanguageFromFileName(fileName);
     return this.getSupportedLanguages().includes(language);
   }
-
-  // Clean up resources
   dispose() {
     this.highlighter = null;
     this.isLoaded = false;
     this.isLoading = false;
   }
 }
-
-// Create singleton instance
 export const shikiService = new ShikiService();
-
-// Export class for testing
 export { ShikiService };

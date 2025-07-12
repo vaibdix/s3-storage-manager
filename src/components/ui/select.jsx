@@ -1,4 +1,4 @@
-// components/ui/select.jsx - Shadcn Select implementation in JavaScript
+// components/ui/select.jsx
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Check } from 'lucide-react';
 
@@ -64,8 +64,6 @@ const Select = ({
         }
         return child;
       })}
-
-      {/* Hidden select for form submission */}
       <select
         name={name}
         value={currentValue}
@@ -127,7 +125,6 @@ const SelectValue = ({
   currentValue,
   children
 }) => {
-  // If we have children (items), find the matching label
   if (children && currentValue) {
     const matchingChild = React.Children.toArray(children).find(
       child => child.props?.value === currentValue
@@ -136,13 +133,9 @@ const SelectValue = ({
       return <span>{matchingChild.props.children}</span>;
     }
   }
-
-  // If no matching child found but we have a value, display it
   if (currentValue) {
     return <span>{currentValue}</span>;
   }
-
-  // Otherwise show placeholder
   return <span className="text-muted-foreground">{placeholder}</span>;
 };
 
@@ -254,10 +247,8 @@ const SelectSeparator = ({
   );
 };
 
-// Hook for controlled select
 const useSelect = (initialValue = '') => {
   const [value, setValue] = useState(initialValue);
-
   const handleValueChange = (newValue) => {
     setValue(newValue);
   };

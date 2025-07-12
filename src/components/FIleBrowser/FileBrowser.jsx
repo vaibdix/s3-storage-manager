@@ -1,8 +1,7 @@
-// components/FileBrowser/FileBrowser.jsx - Final Enhanced Version with shadcn Select
+// components/FileBrowser/FileBrowser.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Upload, Plus, ArrowLeft, AlertTriangle, Trash2, Home,
-  Search, Filter, RefreshCw, GripVertical, SlidersHorizontal
+  Upload, Plus, ArrowLeft, AlertTriangle, Trash2, Home, Search, Filter, RefreshCw, GripVertical, SlidersHorizontal
 } from 'lucide-react';
 
 // Hooks
@@ -15,7 +14,9 @@ import { useFolderOperations } from '../../hooks/useFolderOperations';
 
 // Components
 import LoadingSpinner from '../common/LoadingSpinner';
-import FileTable from './FileTable';
+// import FileTable from './FileTable';
+import VirtualizedFileTable from './VirtualizedFileTable';
+
 import UploadModal from './UploadModal';
 import NewFolderModal from '../modal/NewFolderModal';
 import RenameModal from '../modal/RenameModal';
@@ -25,128 +26,176 @@ import ShareModal from '../modal/ShareModal';
 // UI Components
 import { Button } from '../ui/button';
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
-import {
-  Breadcrumb, BreadcrumbItem, BreadcrumbLink,
-  BreadcrumbList, BreadcrumbSeparator
-} from '../ui/breadcrumb';
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from '../ui/breadcrumb';
 import { Badge } from '../ui/badge';
 import { Input } from '../ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { useToast } from '../ui/use-toast';
 
 export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
-  // Core data state
   const [items, setItems] = useState({ folders: [], files: [] });
-  const [showDebug, setShowDebug] = useState(false);
-
-
-  // Main async operations
+  const { toast } = useToast();
   const { loading, error, execute, clearError } = useAsyncOperation();
+  const { currentPath, pathSegments, breadcrumbs, navigateToRoot, navigateToSegment, navigateUp, canGoBack, canGoForward, goBack, goForward } = useNavigation();
 
-  // Navigation hook
-  const {
-    currentPath,
-    pathSegments,
-    breadcrumbs,
-    navigateToRoot,
-    navigateToSegment,
-    navigateUp,
-    canGoBack,
-    canGoForward,
-    goBack,
-    goForward
-  } = useNavigation();
+  const { selectedItems, toggleSelection, selectAll, clearSelection, selectionInfo, selectionOptions, handleSelectionChange, getCurrentSelectionType } = useSelection();
 
-  // Selection hook
-  const {
-    selectedItems,
-    toggleSelection,
-    selectAll,
-    clearSelection,
-    selectionInfo,
-    selectionOptions,
-    handleSelectionChange,
-    getCurrentSelectionType
-  } = useSelection();
+  const { searchQuery, setSearchQuery, filterType, setFilterType, sortBy, setSortBy, sortOrder, setSortOrder, filteredItems, clearFilters, getFilteredCount, filterOptions, sortOptions, getCurrentSortValue, handleSortChange, applyQuickFilter, quickFilterOptions } = useFilteredItems(items);
 
-  // Filtering and search hook
-  const {
-    searchQuery,
-    setSearchQuery,
-    filterType,
-    setFilterType,
-    sortBy,
-    setSortBy,
-    sortOrder,
-    setSortOrder,
-    filteredItems,
-    clearFilters,
-    getFilteredCount,
-    filterOptions,
-    sortOptions,
-    getCurrentSortValue,
-    handleSortChange,
-    applyQuickFilter,
-    quickFilterOptions
-  } = useFilteredItems(items);
-
-  // Load items function
   const loadItems = useCallback(async () => {
     await execute(async () => {
-      const result = await s3Service.listObjects(currentPath, true);
-      setItems(result);
-      clearSelection();
+      try {
+        const result = await s3Service.listObjects(currentPath, true);
+        setItems(result);
+        clearSelection();
+        const totalItems = (result.folders?.length || 0) + (result.files?.length || 0);
+        if (totalItems === 0 && currentPath === '') {
+          toast({
+            title: "Folder Empty",
+            description: "This S3 bucket is empty. Upload some files to get started!",
+          });
+        }
+
+      } catch (error) {
+        console.error('Failed to load items:', error);
+        toast({
+          title: "Failed to Load Files",
+          description: error.message || "Could not load folder contents. Please try again.",
+          variant: "destructive",
+        });
+        throw error;
+      }
     });
-  }, [currentPath, s3Service, execute, clearSelection]);
+  }, [currentPath, s3Service, execute, clearSelection, toast]);
 
-  // File upload hook
-  const {
-    showUpload,
-    setShowUpload,
-    uploadProgress,
-    uploadStats,
-    isUploading,
-    handleFileUpload,
-    cancelUpload,
-    cancelAllUploads
-  } = useFileUpload(s3Service, currentPath, loadItems);
+  const { showUpload, setShowUpload, uploadProgress, uploadStats, isUploading, handleFileUpload: originalHandleFileUpload,
+    cancelUpload, cancelAllUploads, getUploadStats } = useFileUpload(s3Service, currentPath, loadItems);
+  const handleFileUpload = useCallback(async (files) => {
+    try {
+      const fileCount = files.length;
+      const totalSize = files.reduce((sum, file) => sum + file.size, 0);
+      toast({
+        title: "Upload Started",
+        description: `Uploading ${fileCount} file${fileCount !== 1 ? 's' : ''} (${(totalSize / 1024 / 1024).toFixed(1)} MB)`,
+      });
+      await originalHandleFileUpload(files);
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast({
+        title: "Upload Failed",
+        description: error.message || "Failed to upload files. Please try again.",
+        variant: "destructive",
+      });
+    }
+  }, [originalHandleFileUpload, toast]);
 
-  // Folder operations hook
-  const {
-    showNewFolder,
-    showRename,
-    showMove,
-    showShare,
-    itemToRename,
-    itemToMove,
-    itemToShare,
-    operationLoading,
-    createFolder,
-    handleRename,
-    handleMove,
-    deleteItems,
-    downloadFile,
-    openRenameModal,
-    closeRenameModal,
-    openMoveModal,
-    closeMoveModal,
-    openShareModal,
-    closeShareModal,
-    openNewFolderModal,
-    closeNewFolderModal
-  } = useFolderOperations(s3Service, currentPath, loadItems);
+  const { showNewFolder, showRename, showMove, showShare, itemToRename, itemToMove, itemToShare, operationLoading, createFolder: originalCreateFolder, handleRename: originalHandleRename, handleMove: originalHandleMove, deleteItems: originalDeleteItems, downloadFile, openRenameModal, closeRenameModal, openMoveModal, closeMoveModal, openShareModal, closeShareModal, openNewFolderModal, closeNewFolderModal } = useFolderOperations(s3Service, currentPath, loadItems);
 
-  // Load items when path changes
+  const createFolder = useCallback(async (folderName) => {
+    try {
+      await originalCreateFolder(folderName);
+      toast({
+        title: "Folder Created",
+        description: `Successfully created folder "${folderName}"`,
+        variant: "success",
+      });
+    } catch (error) {
+      console.error('Create folder error:', error);
+      toast({
+        title: "Failed to Create Folder",
+        description: error.message || "Could not create folder. Please try again.",
+        variant: "destructive",
+      });
+      throw error;
+    }
+  }, [originalCreateFolder, toast]);
+
+  const handleRename = useCallback(async (newName) => {
+    try {
+      const isFolder = itemToRename?.type === 'folder';
+      const oldName = itemToRename?.name;
+      await originalHandleRename(newName);
+      toast({
+        title: `${isFolder ? 'Folder' : 'File'} Renamed`,
+        description: `Successfully renamed "${oldName}" to "${newName}"`,
+        variant: "success",
+      });
+    } catch (error) {
+      console.error('Rename error:', error);
+      toast({
+        title: "Rename Failed",
+        description: error.message || "Could not rename item. Please try again.",
+        variant: "destructive",
+      });
+      throw error;
+    }
+  }, [originalHandleRename, itemToRename, toast]);
+
+  const handleMove = useCallback(async (destinationPath) => {
+    try {
+      const isFolder = itemToMove?.type === 'folder';
+      const itemName = itemToMove?.name;
+      await originalHandleMove(destinationPath);
+      const destName = destinationPath === '' ? 'root folder' : destinationPath.replace(/\/$/, '');
+      toast({
+        title: `${isFolder ? 'Folder' : 'File'} Moved`,
+        description: `Successfully moved "${itemName}" to ${destName}`,
+        variant: "success",
+      });
+    } catch (error) {
+      console.error('Move error:', error);
+      toast({
+        title: "Move Failed",
+        description: error.message || "Could not move item. Please try again.",
+        variant: "destructive",
+      });
+      throw error;
+    }
+  }, [originalHandleMove, itemToMove, toast]);
+
+  const handleDelete = useCallback(async (keys) => {
+    try {
+      const toDelete = keys ?? Array.from(selectedItems);
+      if (toDelete.length === 0) return;
+      await execute(async () => {
+        await originalDeleteItems(toDelete, selectedItems);
+        toast({
+          title: "Items Deleted",
+          description: `Successfully deleted ${toDelete.length} item${toDelete.length !== 1 ? 's' : ''}`,
+          variant: "success",
+        });
+      });
+
+    } catch (error) {
+      console.error('Delete error:', error);
+      toast({
+        title: "Delete Failed",
+        description: error.message || "Could not delete items. Please try again.",
+        variant: "destructive",
+      });
+    }
+  }, [execute, originalDeleteItems, selectedItems, toast]);
+
+  const handleDownload = useCallback((item) => {
+    try {
+      downloadFile(item);
+      toast({
+        title: "Download Started",
+        description: `Downloading "${item.name}"`,
+      });
+
+    } catch (error) {
+      console.error('Download error:', error);
+      toast({
+        title: "Download Failed",
+        description: error.message || "Could not start download. Please try again.",
+        variant: "destructive",
+      });
+    }
+  }, [downloadFile, toast]);
   useEffect(() => {
     loadItems();
   }, [loadItems]);
-
-  // Listen for refresh events from header
   useEffect(() => {
     const handleRefresh = () => {
       loadItems();
@@ -154,28 +203,29 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
     window.addEventListener('refreshFiles', handleRefresh);
     return () => window.removeEventListener('refreshFiles', handleRefresh);
   }, [loadItems]);
-
-  // Enhanced delete with better UX
-  const handleDelete = useCallback(async (keys) => {
-    await execute(async () => {
-      await deleteItems(keys, selectedItems);
-    });
-  }, [execute, deleteItems, selectedItems]);
-
-  // Enhanced folder creation
-  const handleCreateFolder = useCallback(async (folderName) => {
-    await execute(async () => {
-      await createFolder(folderName);
-    });
-  }, [execute, createFolder]);
-
-  // Get filter count info
+  useEffect(() => {
+    if (!isUploading && Object.keys(uploadProgress).length > 0) {
+      const stats = getUploadStats();
+      if (stats.completed > 0 && stats.failed === 0) {
+        toast({
+          title: "Upload Complete",
+          description: `Successfully uploaded ${stats.completed} file${stats.completed !== 1 ? 's' : ''}`,
+          variant: "success",
+        });
+      } else if (stats.failed > 0) {
+        toast({
+          title: "Upload Issues",
+          description: `${stats.completed} succeeded, ${stats.failed} failed`,
+          variant: "warning",
+        });
+      }
+    }
+  }, [isUploading, uploadProgress, getUploadStats, toast]);
   const filterCount = getFilteredCount();
   const isFiltered = searchQuery || filterType !== 'all';
 
   return (
     <div className="bg-background">
-      {/* Breadcrumb Navigation */}
       <div className="bg-card border-b border-border py-3">
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex items-center justify-between">
@@ -197,8 +247,6 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
                 ))}
               </BreadcrumbList>
             </Breadcrumb>
-
-            {/* Navigation controls */}
             <div className="flex items-center space-x-2">
               <Button
                 variant="ghost"
@@ -232,10 +280,8 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
         </div>
       </div>
 
-      {/* Enhanced Toolbar */}
       <div className="bg-card border-b border-border py-4">
         <div className="max-w-7xl mx-auto px-4 space-y-4">
-          {/* Top row - Action buttons */}
           <div className="flex flex-col sm:flex-row gap-4 sm:justify-between">
             <div className="flex flex-wrap gap-2">
               {currentPath && (
@@ -260,7 +306,6 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              {/* Selection Controls */}
               {filterCount.filtered > 0 && (
                 <Select
                   value={getCurrentSelectionType(filteredItems)}
@@ -293,9 +338,7 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
             </div>
           </div>
 
-          {/* Bottom row - Search, Filter, and Sort */}
           <div className="flex flex-col lg:flex-row gap-3">
-            {/* Search */}
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
@@ -315,7 +358,6 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
               )}
             </div>
 
-            {/* Filter with enhanced shadcn Select */}
             <div className="flex items-center space-x-2">
               <Filter className="w-4 h-4 text-muted-foreground" />
               <Select value={filterType} onValueChange={setFilterType}>
@@ -332,7 +374,6 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
               </Select>
             </div>
 
-            {/* Sort with enhanced shadcn Select */}
             <div className="flex items-center space-x-2">
               <GripVertical className="w-4 h-4 text-muted-foreground" />
               <Select
@@ -352,7 +393,6 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
               </Select>
             </div>
 
-            {/* Quick Filters */}
             <div className="flex items-center space-x-2">
               <SlidersHorizontal className="w-4 h-4 text-muted-foreground" />
               <Select onValueChange={applyQuickFilter}>
@@ -369,14 +409,11 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
               </Select>
             </div>
 
-            {/* Clear filters - matching button size */}
             {isFiltered && (
               <Button variant="outline" size="default" onClick={clearFilters}>
                 Clear Filters
               </Button>
             )}
-
-            {/* Results info */}
             {isFiltered && (
               <div className="text-sm text-muted-foreground self-center whitespace-nowrap">
                 {filterCount.filtered} of {filterCount.total} items
@@ -386,7 +423,6 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
         </div>
       </div>
 
-      {/* Error message */}
       {error && (
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
@@ -406,7 +442,6 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
         </div>
       )}
 
-      {/* Selection info */}
       {selectionInfo.count > 0 && (
         <div className="max-w-7xl mx-auto px-4 py-2">
           <Badge variant="default" className="bg-primary/10 text-primary border-primary/20">
@@ -415,17 +450,16 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
         </div>
       )}
 
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto p-4">
         {loading ? (
           <LoadingSpinner centered message="Loading files..." />
         ) : (
-          <FileTable
+          <VirtualizedFileTable
             items={filteredItems}
             selectedItems={selectedItems}
             onToggleSelection={toggleSelection}
             onNavigateToFolder={navigateToSegment}
-            onDownloadFile={downloadFile}
+            onDownloadFile={handleDownload}
             onDeleteItems={handleDelete}
             onRenameItem={openRenameModal}
             onMoveItem={openMoveModal}
@@ -435,7 +469,6 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
         )}
       </main>
 
-      {/* Enhanced Upload Modal with Progress */}
       <UploadModal
         isOpen={showUpload}
         onClose={() => setShowUpload(false)}
@@ -447,7 +480,6 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
         onCancelAllUploads={cancelAllUploads}
       />
 
-      {/* Other Modals with proper accessibility */}
       <Dialog open={showNewFolder} onOpenChange={closeNewFolderModal}>
         <DialogTrigger asChild>
           <span />
@@ -462,7 +494,7 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
           <NewFolderModal
             isOpen={showNewFolder}
             onClose={closeNewFolderModal}
-            onCreateFolder={handleCreateFolder}
+            onCreateFolder={createFolder}
             isCreating={operationLoading.create}
           />
         </DialogContent>

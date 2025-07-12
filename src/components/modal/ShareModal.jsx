@@ -1,6 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Share, Copy, Check, Clock, Link } from 'lucide-react';
-
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '../ui/dialog';
 import { Button } from '../ui/button';
 
@@ -24,10 +23,8 @@ function ShareModal({
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-
   const isFolder = item?.type === 'folder';
   const itemName = item?.name || '';
-
   const generateUrl = useCallback(async () => {
     if (!item || !s3Service) return;
 
@@ -37,15 +34,12 @@ function ShareModal({
     try {
       let result;
       if (isFolder) {
-        // For folders, we'll create a simple info message
-        // In a real implementation, you might create a ZIP or landing page
         setError('Folder sharing creates individual file links. Use the "Copy Links" option below.');
         setLoading(false);
         return;
       } else {
         result = s3Service.generateShareUrl(item.fullPath, selectedExpiry);
       }
-
       setShareUrl(result.url);
     } catch (err) {
       setError(err.message);
@@ -53,7 +47,6 @@ function ShareModal({
       setLoading(false);
     }
   }, [item, s3Service, selectedExpiry, isFolder]);
-
   useEffect(() => {
     if (isOpen && item) {
       generateUrl();
@@ -62,7 +55,6 @@ function ShareModal({
 
   const copyToClipboard = useCallback(async () => {
     if (!shareUrl) return;
-
     try {
       await navigator.clipboard.writeText(shareUrl);
       setCopied(true);
@@ -71,29 +63,24 @@ function ShareModal({
       console.error('Failed to copy:', err);
     }
   }, [shareUrl]);
-
   const handleExpiryChange = useCallback((newExpiry) => {
     setSelectedExpiry(newExpiry);
     setCopied(false);
   }, []);
-
   const handleClose = useCallback(() => {
     setShareUrl('');
     setError('');
     setCopied(false);
     onClose();
   }, [onClose]);
-
   const getExpiryLabel = (seconds) => {
     const option = EXPIRY_OPTIONS.find(opt => opt.value === seconds);
     return option ? option.label : `${seconds / 3600} hours`;
   };
-
   const getExpiryTime = () => {
     const expiryDate = new Date(Date.now() + (selectedExpiry * 1000));
     return expiryDate.toLocaleString();
   };
-
   if (!item) return null;
 
   return (
@@ -198,7 +185,6 @@ function ShareModal({
             </Button>
           )}
         </DialogFooter>
-
         <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
           <h4 className="text-sm font-medium text-blue-800 mb-1">🔗 Share Link Info:</h4>
           <ul className="text-xs text-blue-700 space-y-1">

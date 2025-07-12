@@ -4,35 +4,24 @@ export const validateFolderNameForS3 = (folderName) => {
   if (!folderName || folderName.trim().length === 0) {
     throw new Error('Folder name cannot be empty');
   }
-
   const trimmedName = folderName.trim();
-
-  // Check for invalid characters - be more restrictive for S3
   const invalidChars = /[<>:"/\\|?*\x00-\x1f\x80-\xff]/;
   if (invalidChars.test(trimmedName)) {
     throw new Error('Folder name contains invalid characters. Use only letters, numbers, hyphens, and underscores.');
   }
-
-  // Check for reserved names
   const reservedNames = ['CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9'];
   if (reservedNames.includes(trimmedName.toUpperCase())) {
     throw new Error('Folder name cannot be a reserved system name');
   }
-
-  // Additional S3-specific validations
   if (trimmedName.startsWith('.') || trimmedName.startsWith('-')) {
     throw new Error('Folder name cannot start with a dot or hyphen');
   }
-
   if (trimmedName.endsWith('.') || trimmedName.endsWith('-')) {
     throw new Error('Folder name cannot end with a dot or hyphen');
   }
-
-  // Check for consecutive dots or special patterns
   if (trimmedName.includes('..')) {
     throw new Error('Folder name cannot contain consecutive dots');
   }
-
   return true;
 };
 
@@ -40,15 +29,11 @@ export const validateFileNameForS3 = (fileName) => {
   if (!fileName || fileName.trim().length === 0) {
     throw new Error('File name cannot be empty');
   }
-
   const trimmedName = fileName.trim();
-
-  // Check for invalid characters - be more restrictive for S3
   const invalidChars = /[<>:"/\\|?*\x00-\x1f\x80-\xff]/;
   if (invalidChars.test(trimmedName)) {
     throw new Error('File name contains invalid characters. Use only letters, numbers, hyphens, underscores, and dots.');
   }
-
   return true;
 };
 
@@ -67,32 +52,25 @@ function RenameModal({
 }) {
   const [newName, setNewName] = useState('');
   const [error, setError] = useState('');
-
   const isFolder = item?.type === 'folder';
   const originalName = item?.name || '';
-
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     setError('');
-
     if (!newName.trim()) {
       setError('Name cannot be empty');
       return;
     }
-
     if (newName.trim() === originalName) {
       setError('New name must be different from current name');
       return;
     }
-
     try {
-      // Validate the new name with stricter S3-compatible validation
       if (isFolder) {
         validateFolderNameForS3(newName.trim());
       } else {
         validateFileNameForS3(newName.trim());
       }
-
       await onRename(newName.trim());
       setNewName('');
     } catch (err) {
@@ -115,7 +93,6 @@ function RenameModal({
 
   useEffect(() => {
     if (isOpen && item) {
-      // For files, pre-fill with name without extension for easier editing
       if (isFolder) {
         setNewName(originalName);
       } else {
@@ -164,7 +141,6 @@ function RenameModal({
               maxLength={255}
               autoFocus
               onFocus={(e) => {
-                // For files, select name without extension
                 if (!isFolder && newName.includes('.')) {
                   const lastDotIndex = newName.lastIndexOf('.');
                   e.target.setSelectionRange(0, lastDotIndex);

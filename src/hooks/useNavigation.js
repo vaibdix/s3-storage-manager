@@ -45,11 +45,9 @@ export const useNavigation = (initialPath = '') => {
 
   const navigateToSegment = useCallback((segmentIndex) => {
     if (typeof segmentIndex === 'number') {
-      // Navigating via breadcrumb segment
       const newPath = pathSegments.slice(0, segmentIndex + 1).join('/') + '/';
       navigateTo(newPath);
     } else {
-      // Navigating to a folder - segmentIndex is actually the folder path
       navigateTo(segmentIndex);
     }
   }, [pathSegments, navigateTo]);

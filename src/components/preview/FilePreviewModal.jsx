@@ -1,4 +1,4 @@
-// components/preview/FilePreviewModal.jsx - FINAL WORKING VERSION with guaranteed scrolling
+// components/preview/FilePreviewModal.jsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Download, ExternalLink, ZoomIn, ZoomOut, RotateCw, RotateCcw,
@@ -9,15 +9,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 
-// Import the pinch-zoom library (default export)
 import QuickPinchZoom, { make3dTransformValue } from 'react-quick-pinch-zoom';
-// Import Shiki service
 import { shikiService } from '../../services/ShikiService';
-
-// File type detection
 const getFileCategory = (fileName) => {
   const ext = fileName.split('.').pop()?.toLowerCase();
-
   const categories = {
     image: ['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'bmp', 'ico', 'tiff'],
     video: ['mp4', 'avi', 'mkv', 'mov', 'wmv', 'flv', 'webm', 'm4v', '3gp'],
@@ -36,25 +31,19 @@ const getFileCategory = (fileName) => {
   return 'other';
 };
 
-// Enhanced Image Preview with react-quick-pinch-zoom
 const ImagePreview = ({ url, fileName }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
   const [rotation, setRotation] = useState(0);
-
   const imageRef = useRef(null);
-
   const handleImageLoad = useCallback(() => {
     setLoading(false);
   }, []);
-
   const handleImageError = useCallback(() => {
     setLoading(false);
     setError(true);
   }, []);
-
-  // Handle updates from the library
   const handleUpdate = useCallback(({ x, y, scale }) => {
     const { current: img } = imageRef;
     if (img) {
@@ -63,8 +52,6 @@ const ImagePreview = ({ url, fileName }) => {
       setTransform({ x, y, scale });
     }
   }, [rotation]);
-
-  // Manual zoom controls
   const zoomIn = useCallback(() => {
     const newScale = Math.min(transform.scale * 1.5, 5);
     const value = make3dTransformValue({
@@ -121,7 +108,6 @@ const ImagePreview = ({ url, fileName }) => {
 
   return (
     <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* Controls */}
       <div
         className="flex items-center justify-between p-4 bg-background/95 backdrop-blur-sm border-b"
         style={{ flexShrink: 0 }}
@@ -220,7 +206,6 @@ const ImagePreview = ({ url, fileName }) => {
   );
 };
 
-// WORKING CodePreview with guaranteed scrolling
 const CodePreview = ({ url, fileName }) => {
   const [content, setContent] = useState('');
   const [highlightedCode, setHighlightedCode] = useState('');
@@ -229,8 +214,6 @@ const CodePreview = ({ url, fileName }) => {
   const [theme, setTheme] = useState('github-dark');
   const [copied, setCopied] = useState(false);
   const [language, setLanguage] = useState('');
-
-  // Fetch file content
   useEffect(() => {
     const fetchContent = async () => {
       try {
@@ -238,7 +221,6 @@ const CodePreview = ({ url, fileName }) => {
         if (!response.ok) throw new Error('Failed to fetch file');
         const text = await response.text();
         setContent(text);
-
         const detectedLang = shikiService.getLanguageFromFileName(fileName);
         setLanguage(detectedLang);
       } catch (err) {
@@ -250,22 +232,18 @@ const CodePreview = ({ url, fileName }) => {
     fetchContent();
   }, [url, fileName]);
 
-  // Highlight code
   useEffect(() => {
     if (!content) return;
-
     const highlightCode = async () => {
       try {
         setLoading(true);
         setError(null);
-
         let result;
         try {
           result = await shikiService.highlightCodeShorthand(content, fileName, theme);
         } catch (shorthandError) {
           result = await shikiService.highlightCode(content, fileName, theme);
         }
-
         if (result.success) {
           setHighlightedCode(result.html);
         } else {
@@ -275,10 +253,8 @@ const CodePreview = ({ url, fileName }) => {
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#39;');
-
           setHighlightedCode(`<pre style="margin: 0; padding: 1rem; background: #1e1e1e; color: #d4d4d4; font-family: monospace; white-space: pre; overflow: visible;"><code>${escapedContent}</code></pre>`);
         }
-
         setLoading(false);
       } catch (err) {
         console.error('Code highlighting failed:', err);
@@ -334,7 +310,6 @@ const CodePreview = ({ url, fileName }) => {
 
   return (
     <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* Header - Fixed height */}
       <div
         className="flex items-center justify-between p-4 border-b bg-muted/20"
         style={{ flexShrink: 0 }}
@@ -377,8 +352,6 @@ const CodePreview = ({ url, fileName }) => {
           </Button>
         </div>
       </div>
-
-      {/* CRITICAL: Code container that WILL scroll */}
       <div
         style={{
           flex: 1,
@@ -397,7 +370,6 @@ const CodePreview = ({ url, fileName }) => {
   );
 };
 
-// PDF Preview Component
 const PDFPreview = ({ url, fileName }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -573,10 +545,8 @@ const TextPreview = ({ url, fileName }) => {
   );
 };
 
-// Unsupported File Component
 const UnsupportedPreview = ({ fileName, fileSize, onDownload }) => {
   const category = getFileCategory(fileName);
-
   const getIcon = () => {
     switch (category) {
       case 'archive': return <File className="w-16 h-16 text-orange-500" />;
@@ -616,7 +586,6 @@ const UnsupportedPreview = ({ fileName, fileSize, onDownload }) => {
   );
 };
 
-// MAIN FILE PREVIEW MODAL - FINAL WORKING VERSION
 const FilePreviewModal = ({
   isOpen,
   onClose,
@@ -626,7 +595,6 @@ const FilePreviewModal = ({
   const [previewUrl, setPreviewUrl] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
   useEffect(() => {
     if (isOpen && file && s3Service) {
       generatePreviewUrl();
@@ -681,7 +649,6 @@ const FilePreviewModal = ({
     }
 
     const category = getFileCategory(file.name);
-
     switch (category) {
       case 'image':
         return <ImagePreview url={previewUrl} fileName={file.name} />;
@@ -713,7 +680,6 @@ const FilePreviewModal = ({
 
   return (
     <>
-      {/* Add global styles to head without JSX syntax */}
       <style dangerouslySetInnerHTML={{
         __html: `
           .modal-code-container .shiki {
@@ -751,7 +717,6 @@ const FilePreviewModal = ({
             overflow: 'hidden'
           }}
         >
-          {/* Header - Fixed height */}
           <DialogHeader
             className="p-6 pb-4 border-b"
             style={{ flexShrink: 0 }}
@@ -778,8 +743,6 @@ const FilePreviewModal = ({
               </Button>
             </div>
           </DialogHeader>
-
-          {/* Content - CRITICAL: This forces scrolling */}
           <div
             style={{
               flex: 1,

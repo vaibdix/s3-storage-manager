@@ -20,7 +20,6 @@ const useLocalStorage = (key, initialValue) => {
       console.warn('localStorage is not available');
       return;
     }
-
     try {
       const valueToStore = value instanceof Function ? value(storedValue) : value;
       setStoredValue(valueToStore);
@@ -35,7 +34,6 @@ const useLocalStorage = (key, initialValue) => {
       console.warn('localStorage is not available');
       return;
     }
-
     try {
       window.localStorage.removeItem(key);
       setStoredValue(initialValue);

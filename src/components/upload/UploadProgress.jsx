@@ -150,8 +150,6 @@ const UploadProgressItem = ({
           </div>
         </div>
       </div>
-
-      {/* Progress bar */}
       <div className="mb-3">
         <Progress
           value={progress}
@@ -159,8 +157,6 @@ const UploadProgressItem = ({
           indicatorClassName={progressBarColor}
         />
       </div>
-
-      {/* Stats */}
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <div className="flex items-center space-x-4">
           <span>
@@ -185,7 +181,6 @@ const UploadProgressItem = ({
             </span>
           )}
         </div>
-
         {error && (
           <span className="text-red-600 font-medium">
             Error: {error}
@@ -207,20 +202,14 @@ const UploadProgress = ({
   className = ""
 }) => {
   const uploadFiles = Object.keys(uploadProgress);
-
   if (uploadFiles.length === 0) return null;
-
   const totalFiles = uploadFiles.length;
   const completedFiles = uploadFiles.filter(fileName => uploadProgress[fileName] >= 100).length;
   const failedFiles = uploadFiles.filter(fileName => uploadStats[fileName]?.failed).length;
   const activeFiles = totalFiles - completedFiles - failedFiles;
-
-  // Calculate overall progress
   const overallProgress = uploadFiles.length > 0
     ? Math.round(uploadFiles.reduce((sum, fileName) => sum + uploadProgress[fileName], 0) / uploadFiles.length)
     : 0;
-
-  // Calculate total upload speed
   const totalSpeed = uploadFiles.reduce((sum, fileName) => {
     const stats = uploadStats[fileName];
     return sum + (stats?.smoothedSpeed || 0);
@@ -228,7 +217,6 @@ const UploadProgress = ({
 
   return (
     <div className={`space-y-4 ${className}`}>
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <h3 className="text-lg font-semibold text-foreground">
@@ -263,7 +251,6 @@ const UploadProgress = ({
         </div>
       </div>
 
-      {/* Overall progress bar */}
       <div className="space-y-2">
         <Progress value={overallProgress} className="h-2" />
         <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -287,7 +274,6 @@ const UploadProgress = ({
         </div>
       </div>
 
-      {/* Individual file progress */}
       <div className="space-y-3 max-h-96 overflow-y-auto">
         {uploadFiles.map(fileName => (
           <UploadProgressItem

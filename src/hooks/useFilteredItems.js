@@ -1,4 +1,4 @@
-// hooks/useFilteredItems.js - Updated with shadcn Select support
+// hooks/useFilteredItems.js
 import { useState, useMemo, useCallback } from 'react';
 
 const FILE_TYPE_EXTENSIONS = {
@@ -33,9 +33,7 @@ export const useFilteredItems = (items) => {
 
   const searchItems = useCallback((items, query) => {
     if (!query.trim()) return items;
-
     const searchTerms = query.toLowerCase().split(' ').filter(term => term.length > 0);
-
     return items.filter(item => {
       const name = item.name.toLowerCase();
       return searchTerms.every(term => name.includes(term));
@@ -46,11 +44,9 @@ export const useFilteredItems = (items) => {
     if (type === 'all') {
       return { folders, files };
     }
-
     if (type === 'folder') {
       return { folders, files: [] };
     }
-
     const filteredFiles = files.filter(file => getFileType(file.name) === type);
     return { folders: [], files: filteredFiles };
   }, [getFileType]);
@@ -81,7 +77,6 @@ export const useFilteredItems = (items) => {
         default:
           comparison = 0;
       }
-
       return sortOrder === 'desc' ? -comparison : comparison;
     });
   }, [getFileType]);
@@ -89,14 +84,11 @@ export const useFilteredItems = (items) => {
   const filteredItems = useMemo(() => {
     let folders = [...(items.folders || [])];
     let files = [...(items.files || [])];
-
     folders = searchItems(folders, searchQuery);
     files = searchItems(files, searchQuery);
-
     const filtered = filterItemsByType(folders, files, filterType);
     folders = filtered.folders;
     files = filtered.files;
-
     folders = sortItems(folders, sortBy, sortOrder);
     files = sortItems(files, sortBy, sortOrder);
 
@@ -116,7 +108,6 @@ export const useFilteredItems = (items) => {
     return { total, filtered };
   }, [items, filteredItems]);
 
-  // Filter type options for shadcn Select
   const filterOptions = useMemo(() => [
     { value: 'all', label: 'All Types', icon: '📁' },
     { value: 'folder', label: 'Folders', icon: '📁' },
@@ -130,7 +121,6 @@ export const useFilteredItems = (items) => {
     { value: 'other', label: 'Other', icon: '📎' }
   ], []);
 
-  // Sort options for shadcn Select
   const sortOptions = useMemo(() => [
     { value: 'name-asc', label: 'Name ↑', field: 'name', order: 'asc' },
     { value: 'name-desc', label: 'Name ↓', field: 'name', order: 'desc' },
@@ -142,7 +132,6 @@ export const useFilteredItems = (items) => {
     { value: 'type-desc', label: 'Type ↓', field: 'type', order: 'desc' }
   ], []);
 
-  // Handle sort change from select value
   const handleSortChange = useCallback((value) => {
     const option = sortOptions.find(opt => opt.value === value);
     if (option) {
@@ -150,25 +139,18 @@ export const useFilteredItems = (items) => {
       setSortOrder(option.order);
     }
   }, [sortOptions]);
-
-  // Get current sort value for select
   const getCurrentSortValue = useCallback(() => {
     return `${sortBy}-${sortOrder}`;
   }, [sortBy, sortOrder]);
-
-  // Get current filter label with icon
   const getCurrentFilterLabel = useCallback(() => {
     const option = filterOptions.find(opt => opt.value === filterType);
     return option ? `${option.icon} ${option.label}` : 'All Types';
   }, [filterType, filterOptions]);
-
-  // Get current sort label
   const getCurrentSortLabel = useCallback(() => {
     const option = sortOptions.find(opt => opt.value === getCurrentSortValue());
     return option ? option.label : 'Name ↑';
   }, [getCurrentSortValue, sortOptions]);
 
-  // Quick filter presets
   const applyQuickFilter = useCallback((preset) => {
     switch (preset) {
       case 'recent':
@@ -203,7 +185,6 @@ export const useFilteredItems = (items) => {
     { value: 'documents-only', label: '📄 Documents Only' }
   ], []);
 
-  // Advanced filtering
   const getFilterStats = useCallback(() => {
     const allItems = [...(items.folders || []), ...(items.files || [])];
     const stats = {
@@ -212,50 +193,34 @@ export const useFilteredItems = (items) => {
       files: items.files?.length || 0,
       byType: {}
     };
-
-    // Count by file type
     (items.files || []).forEach(file => {
       const type = getFileType(file.name);
       stats.byType[type] = (stats.byType[type] || 0) + 1;
     });
-
     return stats;
   }, [items, getFileType]);
 
   return {
-    // Search state
     searchQuery,
     setSearchQuery,
-
-    // Filter state
     filterType,
     setFilterType,
-
-    // Sort state
     sortBy,
     setSortBy,
     sortOrder,
     setSortOrder,
-
-    // Computed values
     filteredItems,
     getFileType,
-
-    // Actions
     clearFilters,
     getFilteredCount,
     applyQuickFilter,
     handleSortChange,
-
-    // Shadcn Select options
     filterOptions,
     sortOptions,
     quickFilterOptions,
     getCurrentSortValue,
     getCurrentFilterLabel,
     getCurrentSortLabel,
-
-    // Stats
     getFilterStats
   };
 };

@@ -1,32 +1,26 @@
-// hooks/useSelection.js - Updated with shadcn Select integration
+// hooks/useSelection.js
 import { useState, useCallback, useMemo } from 'react';
 
 export const useSelection = () => {
   const [selectedItems, setSelectedItems] = useState(new Set());
-  const [selectionMode, setSelectionMode] = useState('single'); // 'single', 'multiple', 'range'
+  const [selectionMode, setSelectionMode] = useState('single');
 
   const toggleSelection = useCallback((path, ctrlKey = false, shiftKey = false) => {
     setSelectedItems(prev => {
       const next = new Set(prev);
-
-      // Handle different selection modes
       if (shiftKey && selectionMode === 'range') {
-        // Range selection logic would go here
-        // For now, just toggle the item
         if (next.has(path)) {
           next.delete(path);
         } else {
           next.add(path);
         }
       } else if (ctrlKey || selectionMode === 'multiple') {
-        // Multi-selection: toggle item
         if (next.has(path)) {
           next.delete(path);
         } else {
           next.add(path);
         }
       } else {
-        // Single selection: replace selection
         if (next.has(path) && next.size === 1) {
           next.clear();
         } else {
@@ -164,7 +158,6 @@ export const useSelection = () => {
     };
   }, [getSelectedItems]);
 
-  // Selection options for shadcn Select component
   const selectionOptions = useMemo(() => [
     { value: 'none', label: 'Select None' },
     { value: 'all', label: 'Select All' },
@@ -214,20 +207,15 @@ export const useSelection = () => {
   }), [selectedItems, selectionMode]);
 
   return {
-    // Core selection state
     selectedItems,
     selectionMode,
     setSelectionMode,
-
-    // Selection actions
     toggleSelection,
     selectAll,
     selectItems,
     selectByType,
     invertSelection,
     clearSelection,
-
-    // Selection queries
     isSelected,
     isAllSelected,
     isPartiallySelected,
@@ -235,12 +223,8 @@ export const useSelection = () => {
     getSelectedItems,
     getSelectionStats,
     getCurrentSelectionType,
-
-    // Shadcn Select integration
     selectionOptions,
     handleSelectionChange,
-
-    // Selection info
     selectionInfo
   };
 };

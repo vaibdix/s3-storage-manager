@@ -6,7 +6,6 @@ import SharedLinksModal from "../modal/SharedLinksModal";
 
 function Header({ isConnected, s3Service, onRefresh, onDisconnect, isRefreshing }) {
   const [showSharedLinks, setShowSharedLinks] = useState(false);
-
   const getActiveLinkCount = () => {
     if (!s3Service || !isConnected) return 0;
     try {
@@ -16,7 +15,6 @@ function Header({ isConnected, s3Service, onRefresh, onDisconnect, isRefreshing 
       return error;
     }
   };
-
   const activeLinkCount = getActiveLinkCount();
 
   return (

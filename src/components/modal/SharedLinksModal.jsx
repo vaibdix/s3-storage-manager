@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Link, Copy, Check, Trash2, RefreshCw, AlertTriangle, Clock, File } from 'lucide-react';
-
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '../ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 
@@ -16,7 +15,6 @@ function SharedLinksModal({
 
   const loadLinks = useCallback(() => {
     if (!s3Service || !isOpen) return;
-
     setLoading(true);
     try {
       const activeLinks = s3Service.getAllActiveLinks();
@@ -31,7 +29,6 @@ function SharedLinksModal({
   useEffect(() => {
     if (isOpen) {
       loadLinks();
-      // Refresh every 30 seconds to update expired status
       const interval = setInterval(loadLinks, 30000);
       return () => clearInterval(interval);
     }
@@ -68,12 +65,9 @@ function SharedLinksModal({
   const formatTimeRemaining = (expiresAt) => {
     const now = new Date();
     const remaining = expiresAt - now;
-
     if (remaining <= 0) return 'Expired';
-
     const hours = Math.floor(remaining / (1000 * 60 * 60));
     const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
-
     if (hours > 24) {
       const days = Math.floor(hours / 24);
       return `${days}d ${hours % 24}h`;
@@ -235,7 +229,6 @@ function SharedLinksModal({
                 </div>
               )}
 
-              {/* Expired Links */}
               {expiredLinks.length > 0 && (
                 <div>
                   <div className="flex items-center justify-between mb-3">

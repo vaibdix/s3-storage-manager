@@ -1,4 +1,4 @@
-// components/FileBrowser/UploadModal.jsx - Enhanced version with progress
+// components/FileBrowser/UploadModal.jsx
 import React, { useRef, useCallback, useState } from "react";
 import { Upload, X, CheckCircle, AlertCircle, Plus } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../ui/dialog";
@@ -22,11 +22,9 @@ const formatSpeed = (bytesPerSecond) => {
 
 const formatTime = (seconds) => {
   if (!seconds || seconds === Infinity || isNaN(seconds)) return '--';
-
   const hrs = Math.floor(seconds / 3600);
   const mins = Math.floor((seconds % 3600) / 60);
   const secs = Math.floor(seconds % 60);
-
   if (hrs > 0) {
     return `${hrs}h ${mins}m ${secs}s`;
   } else if (mins > 0) {
@@ -36,27 +34,14 @@ const formatTime = (seconds) => {
   }
 };
 
-const UploadProgressItem = ({
-  fileName,
-  progress,
-  stats,
-  onCancel
-}) => {
-  const {
-    size = 0,
-    uploaded = 0,
-    smoothedSpeed = 0,
-    timeRemaining = 0,
-    error = null,
-    failed = false
-  } = stats || {};
+const UploadProgressItem = ({ fileName, progress, stats, onCancel }) => {
+  const { size = 0, uploaded = 0, smoothedSpeed = 0, timeRemaining = 0, error = null, failed = false } = stats || {};
 
   const status = React.useMemo(() => {
     if (failed || error) return 'error';
     if (progress >= 100) return 'completed';
     return 'uploading';
   }, [progress, failed, error]);
-
   const progressBarColor = React.useMemo(() => {
     switch (status) {
       case 'completed': return 'bg-green-500';
@@ -93,17 +78,13 @@ const UploadProgressItem = ({
         <div className="flex items-center space-x-2">
           <Badge variant="outline" className={
             status === 'completed' ? 'text-green-600' :
-            status === 'error' ? 'text-red-600' : 'text-blue-600'
+              status === 'error' ? 'text-red-600' : 'text-blue-600'
           }>
             {progress}%
           </Badge>
 
           {(status === 'uploading' || status === 'error') && onCancel && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onCancel}
-              className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+            <Button variant="ghost" size="sm" onClick={onCancel} className="h-6 w-6 p-0 text-destructive hover:text-destructive"
               title="Cancel upload"
             >
               <X className="w-3 h-3" />
@@ -157,19 +138,9 @@ const UploadProgressItem = ({
   );
 };
 
-function UploadModal({
-  isOpen,
-  onClose,
-  onUpload,
-  isUploading = false,
-  uploadProgress = {},
-  uploadStats = {},
-  onCancelUpload,
-  onCancelAllUploads
-}) {
+function UploadModal({ isOpen, onClose, onUpload, isUploading = false, uploadProgress = {}, uploadStats = {}, onCancelUpload, onCancelAllUploads }) {
   const fileInputRef = useRef(null);
   const [dragOver, setDragOver] = useState(false);
-
   const handleFileSelect = useCallback(
     (e) => {
       const files = e.target.files;
@@ -191,40 +162,30 @@ function UploadModal({
     },
     [onUpload]
   );
-
   const handleDragOver = useCallback((e) => {
     e.preventDefault();
     setDragOver(true);
   }, []);
-
   const handleDragLeave = useCallback((e) => {
     e.preventDefault();
     setDragOver(false);
   }, []);
-
   const handleBrowseClick = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
-
   const uploadFiles = Object.keys(uploadProgress);
   const hasUploads = uploadFiles.length > 0;
   const completedFiles = uploadFiles.filter(fileName => uploadProgress[fileName] >= 100).length;
   const failedFiles = uploadFiles.filter(fileName => uploadStats[fileName]?.failed).length;
   const activeFiles = uploadFiles.length - completedFiles - failedFiles;
-
-  // Calculate overall progress
   const overallProgress = uploadFiles.length > 0
     ? Math.round(uploadFiles.reduce((sum, fileName) => sum + uploadProgress[fileName], 0) / uploadFiles.length)
     : 0;
-
-  // Calculate total upload speed
   const totalSpeed = uploadFiles.reduce((sum, fileName) => {
     const stats = uploadStats[fileName];
     return sum + (stats?.smoothedSpeed || 0);
   }, 0);
-
   const allUploadsComplete = hasUploads && activeFiles === 0;
-
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
@@ -247,11 +208,10 @@ function UploadModal({
           {!hasUploads && (
             <div
               onClick={handleBrowseClick}
-              className={`w-full p-8 border-2 border-dashed rounded-lg transition-colors text-center cursor-pointer ${
-                dragOver
-                  ? 'border-primary bg-primary/5'
-                  : 'border-gray-300 hover:border-gray-400'
-              }`}
+              className={`w-full p-8 border-2 border-dashed rounded-lg transition-colors text-center cursor-pointer ${dragOver
+                ? 'border-primary bg-primary/5'
+                : 'border-gray-300 hover:border-gray-400'
+                }`}
             >
               <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <p className="text-gray-600 mb-1">
@@ -265,7 +225,6 @@ function UploadModal({
 
           {hasUploads && (
             <div className="space-y-4">
-              {/* Overall progress header */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <h3 className="text-lg font-semibold text-foreground">
@@ -299,8 +258,6 @@ function UploadModal({
                   )}
                 </div>
               </div>
-
-              {/* Overall progress bar */}
               <div className="space-y-2">
                 <div className="h-2 w-full rounded-full overflow-hidden bg-muted">
                   <div
@@ -328,8 +285,6 @@ function UploadModal({
                   )}
                 </div>
               </div>
-
-              {/* Individual file progress */}
               <div className="space-y-3 max-h-96 overflow-y-auto">
                 {uploadFiles.map(fileName => (
                   <UploadProgressItem
@@ -341,8 +296,6 @@ function UploadModal({
                   />
                 ))}
               </div>
-
-              {/* Upload more files section */}
               {!isUploading && (
                 <div className="border-t pt-4">
                   <div
@@ -359,13 +312,7 @@ function UploadModal({
             </div>
           )}
 
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            onChange={handleFileSelect}
-            className="hidden"
-            disabled={isUploading}
+          <input ref={fileInputRef} type="file" multiple onChange={handleFileSelect} className="hidden" disabled={isUploading}
           />
 
           <div className="flex justify-end space-x-2">

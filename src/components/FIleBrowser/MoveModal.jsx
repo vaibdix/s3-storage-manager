@@ -1,37 +1,22 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Move, Folder, ArrowLeft, Home } from 'lucide-react';
 import LoadingSpinner from '../common/LoadingSpinner';
-
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '../ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 
-function MoveModal({
-  isOpen,
-  onClose,
-  onMove,
-  item,
-  s3Service,
-  currentPath = '',
-  isMoving = false
-}) {
+function MoveModal({ isOpen, onClose, onMove, item, s3Service, currentPath = '', isMoving = false }) {
   const [selectedPath, setSelectedPath] = useState('');
   const [folders, setFolders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
   const isFolder = item?.type === 'folder';
   const itemName = item?.name || '';
-
-  // Parse the current navigation path
   const pathSegments = selectedPath.split('/').filter(Boolean);
-
   const loadFolders = useCallback(async (path = '') => {
     if (!s3Service || !isOpen) return;
-
     setLoading(true);
     setError('');
-
     try {
       const result = await s3Service.listObjects(path, false); // Don't need metadata for move
       setFolders(result.folders || []);
@@ -55,34 +40,26 @@ function MoveModal({
     setSelectedPath('');
     loadFolders('');
   };
-
   const navigateToFolder = (folderPath) => {
     setSelectedPath(folderPath);
     loadFolders(folderPath);
   };
-
   const navigateUp = () => {
     const parentPath = pathSegments.slice(0, -1).join('/');
     const newPath = parentPath ? `${parentPath}/` : '';
     setSelectedPath(newPath);
     loadFolders(newPath);
   };
-
   const handleMove = useCallback(async () => {
     if (!item) return;
-
-    // Check if trying to move to the same location
     if (selectedPath === currentPath) {
       setError('Cannot move to the same location');
       return;
     }
-
-    // Check if trying to move folder into itself
     if (isFolder && selectedPath.startsWith(item.fullPath)) {
       setError('Cannot move folder into itself');
       return;
     }
-
     try {
       await onMove(selectedPath);
     } catch (err) {
@@ -91,8 +68,7 @@ function MoveModal({
   }, [item, selectedPath, currentPath, isFolder, onMove]);
 
   const handleClose = useCallback(() => {
-    if (!isMoving) {
-      setSelectedPath('');
+    if (!isMoving) {setSelectedPath('');
       setError('');
       setFolders([]);
       onClose();
@@ -100,9 +76,8 @@ function MoveModal({
   }, [isMoving, onClose]);
 
   if (!item) return null;
-
   const canMove = selectedPath !== currentPath &&
-                  !(isFolder && selectedPath.startsWith(item.fullPath));
+    !(isFolder && selectedPath.startsWith(item.fullPath));
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
@@ -124,8 +99,6 @@ function MoveModal({
             <p className="text-destructive text-sm">{error}</p>
           </div>
         )}
-
-        {/* Navigation breadcrumb */}
         <div className="border-b border-border pb-3">
           <div className="flex items-center space-x-2 text-sm">
             <Button
@@ -156,7 +129,6 @@ function MoveModal({
           </div>
         </div>
 
-        {/* Current location indicator */}
         <div className="flex items-center justify-between py-2 px-3 bg-blue-50 rounded-lg border border-blue-200">
           <div className="flex items-center space-x-2">
             <Folder className="w-4 h-4 text-blue-600" />
@@ -170,8 +142,6 @@ function MoveModal({
             </Badge>
           )}
         </div>
-
-        {/* Folder listing */}
         <div className="max-h-80 overflow-y-auto border border-border rounded-lg">
           {loading ? (
             <div className="p-8">
@@ -185,7 +155,6 @@ function MoveModal({
             </div>
           ) : (
             <div className="p-2">
-              {/* Back button */}
               {pathSegments.length > 0 && (
                 <Button
                   variant="ghost"
@@ -198,7 +167,6 @@ function MoveModal({
                 </Button>
               )}
 
-              {/* Folder list */}
               {folders.map((folder) => (
                 <Button
                   key={folder.fullPath}

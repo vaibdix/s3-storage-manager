@@ -1,25 +1,14 @@
-// components/FileBrowser/FileTable.jsx - Updated with visible drag handle and shadcn Select
+// components/FileBrowser/FileTable.jsx
 import React, { useCallback, useState } from "react";
 import {
   Download, Eye, Folder, Trash2, MoreHorizontal, FileText, Image, Archive, Music, Video, Code, FileIcon, Loader2, Edit2, Move, Copy, Share2, GripVertical
 } from "lucide-react";
 import { Button } from "../ui/button";
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow
-} from "../ui/table";
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
-  DropdownMenuTrigger
-} from "../ui/dropdown-menu";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "../ui/dropdown-menu";
 import { Badge } from "../ui/badge";
 import { Checkbox } from "../ui/checkbox";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { formatDate, formatFileSize } from "../../utils";
 import FilePreviewModal from "../preview/FilePreviewModal";
 
@@ -27,51 +16,29 @@ const getFileIcon = (fileName) => {
   const extension = fileName.split('.').pop()?.toLowerCase();
 
   const iconMap = {
-    // Images
     jpg: Image, jpeg: Image, png: Image, gif: Image, svg: Image, webp: Image, bmp: Image, ico: Image, tiff: Image,
-    // Documents
     pdf: FileText, doc: FileText, docx: FileText, txt: FileText, md: FileText, rtf: FileText, odt: FileText,
-    // Archives
     zip: Archive, rar: Archive, '7z': Archive, tar: Archive, gz: Archive, bz2: Archive, xz: Archive,
-    // Audio
     mp3: Music, wav: Music, flac: Music, aac: Music, ogg: Music, wma: Music, m4a: Music, opus: Music,
-    // Video
     mp4: Video, avi: Video, mkv: Video, mov: Video, wmv: Video, flv: Video, webm: Video, m4v: Video, '3gp': Video,
-    // Code
     js: Code, jsx: Code, ts: Code, tsx: Code, html: Code, css: Code, py: Code, java: Code, cpp: Code, c: Code, php: Code, rb: Code, go: Code, rs: Code, swift: Code, json: Code, xml: Code, yml: Code, yaml: Code,
   };
   return iconMap[extension] || FileIcon;
 };
 
-// Check if file can be previewed
 const canPreviewFile = (fileName) => {
   const ext = fileName.split('.').pop()?.toLowerCase();
   const previewableExtensions = [
-    // Images
     'jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'bmp', 'ico', 'tiff',
-    // Documents
     'pdf', 'txt', 'md', 'rtf',
-    // Code
     'js', 'jsx', 'ts', 'tsx', 'html', 'css', 'py', 'java', 'cpp', 'c', 'php', 'rb', 'go', 'rs', 'swift', 'json', 'xml', 'yml', 'yaml',
-    // Media
     'mp4', 'avi', 'mkv', 'mov', 'wmv', 'flv', 'webm', 'm4v', '3gp',
     'mp3', 'wav', 'flac', 'aac', 'ogg', 'wma', 'm4a', 'opus'
   ];
   return previewableExtensions.includes(ext);
 };
 
-function FileTable({
-  items,
-  selectedItems,
-  onToggleSelection,
-  onNavigateToFolder,
-  onDownloadFile,
-  onDeleteItems,
-  onRenameItem,
-  onMoveItem,
-  onShareItem,
-  s3Service
-}) {
+function FileTable({ items, selectedItems, onToggleSelection, onNavigateToFolder, onDownloadFile, onDeleteItems, onRenameItem, onMoveItem, onShareItem, s3Service }) {
   const [hoveredRow, setHoveredRow] = useState(null);
   const [previewFile, setPreviewFile] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
@@ -80,11 +47,9 @@ function FileTable({
   const handleRowClick = useCallback(
     (item, e) => {
       if (e.target.closest("button") || e.target.closest("[role='checkbox']") || e.target.closest(".drag-handle")) return;
-
       if (item.type === "folder") {
         onNavigateToFolder(item.fullPath);
       } else {
-        // For files, open preview if supported, otherwise download
         if (canPreviewFile(item.name)) {
           setPreviewFile(item);
           setShowPreview(true);
@@ -125,7 +90,6 @@ function FileTable({
 
     switch (action) {
       case 'download':
-        // Download each selected file
         allItems.filter(item => selectedItems.has(item.fullPath) && item.type === 'file')
           .forEach(file => onDownloadFile(file));
         break;
@@ -133,8 +97,6 @@ function FileTable({
         onDeleteItems(selectedPaths);
         break;
       case 'move':
-        // For bulk move, we'd need to handle multiple items
-        // For now, just move the first selected item
         const firstSelected = allItems.find(item => selectedItems.has(item.fullPath));
         if (firstSelected) onMoveItem(firstSelected);
         break;
@@ -172,7 +134,6 @@ function FileTable({
   return (
     <>
       <div className="bg-card rounded-xl border border-border overflow-hidden shadow-sm">
-        {/* Bulk Actions Bar */}
         {selectedItems.size > 0 && (
           <div className="bg-muted/20 border-b border-border px-6 py-3">
             <div className="flex items-center justify-between">
@@ -200,7 +161,6 @@ function FileTable({
           </div>
         )}
 
-        {/* Table Container */}
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
@@ -252,14 +212,11 @@ function FileTable({
                     aria-label={`${isFolder ? "Folder" : "File"}: ${item.name}`}
                     data-selected={isSelected}
                   >
-                    {/* Drag Handle */}
                     <TableCell className="px-2">
                       <div className="drag-handle cursor-grab active:cursor-grabbing p-1 rounded hover:bg-muted/50 transition-colors">
                         <GripVertical className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
                       </div>
                     </TableCell>
-
-                    {/* Selection Checkbox */}
                     <TableCell className="px-4">
                       <Checkbox
                         checked={isSelected}
@@ -269,7 +226,6 @@ function FileTable({
                       />
                     </TableCell>
 
-                    {/* Name Column */}
                     <TableCell className="py-3">
                       <div className="flex items-center space-x-3 min-w-0">
                         <div className="relative flex-shrink-0">
@@ -302,7 +258,6 @@ function FileTable({
                       </div>
                     </TableCell>
 
-                    {/* Size Column */}
                     <TableCell className="text-sm text-muted-foreground font-mono">
                       {isFolder ? (
                         item.loading ? (
@@ -352,10 +307,8 @@ function FileTable({
                       )}
                     </TableCell>
 
-                    {/* Actions Column */}
                     <TableCell>
                       <div className="flex items-center justify-end space-x-1">
-                        {/* Preview/Open button */}
                         {isFolder ? (
                           <Button
                             variant="ghost"
@@ -394,7 +347,6 @@ function FileTable({
                           </Button>
                         )}
 
-                        {/* Download button (always available for files) */}
                         {!isFolder && (
                           <Button
                             variant="ghost"
@@ -409,8 +361,6 @@ function FileTable({
                             <Download className="w-4 h-4 text-green-600" />
                           </Button>
                         )}
-
-                        {/* Rename */}
                         <Button
                           variant="ghost"
                           size="sm"
@@ -423,8 +373,6 @@ function FileTable({
                         >
                           <Edit2 className="w-4 h-4 text-chart-2" />
                         </Button>
-
-                        {/* Move */}
                         <Button
                           variant="ghost"
                           size="sm"
@@ -438,7 +386,6 @@ function FileTable({
                           <Move className="w-4 h-4 text-chart-5" />
                         </Button>
 
-                        {/* Share */}
                         <Button
                           variant="ghost"
                           size="sm"
@@ -451,8 +398,6 @@ function FileTable({
                         >
                           <Share2 className="w-4 h-4 text-primary" />
                         </Button>
-
-                        {/* Delete */}
                         <Button
                           variant="ghost"
                           size="sm"
@@ -465,8 +410,6 @@ function FileTable({
                         >
                           <Trash2 className="w-4 h-4 text-destructive" />
                         </Button>
-
-                        {/* More options dropdown */}
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button
@@ -483,7 +426,7 @@ function FileTable({
                             {!isFolder && canPreview && (
                               <>
                                 <DropdownMenuItem
-                                  onClick={() => handlePreviewClick(item, { stopPropagation: () => {} })}
+                                  onClick={() => handlePreviewClick(item, { stopPropagation: () => { } })}
                                   className="flex items-center space-x-2"
                                 >
                                   <Eye className="w-4 h-4" />
@@ -501,7 +444,6 @@ function FileTable({
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={() => {
-                                // TODO: Implement copy functionality
                               }}
                               className="flex items-center space-x-2"
                             >
@@ -510,7 +452,6 @@ function FileTable({
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={() => {
-                                // TODO: Implement properties functionality
                               }}
                               className="flex items-center space-x-2"
                             >
@@ -539,7 +480,6 @@ function FileTable({
           </Table>
         </div>
 
-        {/* Enhanced Footer */}
         <div className="bg-muted/20 px-6 py-4 border-t border-border">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
@@ -566,8 +506,6 @@ function FileTable({
           </div>
         </div>
       </div>
-
-      {/* File Preview Modal */}
       <FilePreviewModal
         isOpen={showPreview}
         onClose={() => {

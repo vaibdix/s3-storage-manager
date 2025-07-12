@@ -2,18 +2,13 @@
 import { useState, useCallback } from 'react';
 
 export const useFolderOperations = (s3Service, currentPath, onOperationComplete) => {
-  // Modal states
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [showRename, setShowRename] = useState(false);
   const [showMove, setShowMove] = useState(false);
   const [showShare, setShowShare] = useState(false);
-
-  // Selected items for operations
   const [itemToRename, setItemToRename] = useState(null);
   const [itemToMove, setItemToMove] = useState(null);
   const [itemToShare, setItemToShare] = useState(null);
-
-  // Loading states
   const [operationLoading, setOperationLoading] = useState({
     rename: false,
     move: false,
@@ -27,7 +22,6 @@ export const useFolderOperations = (s3Service, currentPath, onOperationComplete)
   }, []);
 
   const createFolder = useCallback(async (folderName) => {
-    // FIXED: The condition was wrong - it should check if currentPath is NOT undefined
     if (!s3Service || currentPath === undefined) {
       console.error('S3Service or currentPath not available:', { s3Service: !!s3Service, currentPath });
       throw new Error('S3 service not configured or path not available');
@@ -35,15 +29,11 @@ export const useFolderOperations = (s3Service, currentPath, onOperationComplete)
 
     setLoading('create', true);
     try {
-      // Create the full folder path
       const folderPath = currentPath + folderName.trim() + '/';
       console.log('Creating folder at path:', folderPath);
-
       await s3Service.createFolder(folderPath);
       console.log('Folder created successfully');
-
       setShowNewFolder(false);
-
       if (onOperationComplete) {
         await onOperationComplete();
       }
@@ -57,11 +47,9 @@ export const useFolderOperations = (s3Service, currentPath, onOperationComplete)
 
   const handleRename = useCallback(async (newName) => {
     if (!itemToRename || !s3Service) return;
-
     setLoading('rename', true);
     try {
       const isFolder = itemToRename.type === 'folder';
-
       if (isFolder) {
         const oldPath = itemToRename.fullPath;
         const parentPath = currentPath;
@@ -72,10 +60,8 @@ export const useFolderOperations = (s3Service, currentPath, onOperationComplete)
         const newPath = currentPath + newName;
         await s3Service.renameObject(oldPath, newPath);
       }
-
       setShowRename(false);
       setItemToRename(null);
-
       if (onOperationComplete) {
         await onOperationComplete();
       }
@@ -95,7 +81,6 @@ export const useFolderOperations = (s3Service, currentPath, onOperationComplete)
       const isFolder = itemToMove.type === 'folder';
       const sourcePath = itemToMove.fullPath;
       const newPath = destinationPath + itemToMove.name + (isFolder ? '/' : '');
-
       if (isFolder) {
         await s3Service.renameFolder(sourcePath, newPath);
       } else {
@@ -118,10 +103,8 @@ export const useFolderOperations = (s3Service, currentPath, onOperationComplete)
 
   const deleteItems = useCallback(async (keys, selectedItems) => {
     if (!s3Service) return;
-
     const toDelete = keys ?? Array.from(selectedItems);
     if (toDelete.length === 0) return;
-
     if (!window.confirm(
       `Delete ${toDelete.length} item${toDelete.length > 1 ? 's' : ''}? This action cannot be undone.`
     )) {
@@ -161,7 +144,6 @@ export const useFolderOperations = (s3Service, currentPath, onOperationComplete)
     }
   }, [s3Service]);
 
-  // Modal control functions
   const openRenameModal = useCallback((item) => {
     setItemToRename(item);
     setShowRename(true);
@@ -201,28 +183,19 @@ export const useFolderOperations = (s3Service, currentPath, onOperationComplete)
   }, []);
 
   return {
-    // Modal states
     showNewFolder,
     showRename,
     showMove,
     showShare,
-
-    // Selected items
     itemToRename,
     itemToMove,
     itemToShare,
-
-    // Loading states
     operationLoading,
-
-    // Operations
     createFolder,
     handleRename,
     handleMove,
     deleteItems,
     downloadFile,
-
-    // Modal controls
     openRenameModal,
     closeRenameModal,
     openMoveModal,

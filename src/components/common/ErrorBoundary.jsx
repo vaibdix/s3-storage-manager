@@ -1,5 +1,9 @@
+// components/common/ErrorBoundary.jsx
 import React from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Home, Bug } from 'lucide-react';
+import { Button } from '../ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
+import { Badge } from '../ui/badge';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -7,68 +11,204 @@ class ErrorBoundary extends React.Component {
     this.state = {
       hasError: false,
       error: null,
-      errorInfo: null
+      errorInfo: null,
+      errorId: null,
+      retryCount: 0,
+      lastErrorTime: null
     };
   }
-
   static getDerivedStateFromError(error) {
-    return { hasError: true, error };
+    const errorId = `ERR_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return { hasError: true, error, errorId, lastErrorTime: new Date() };
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error('Error caught by boundary:', error, errorInfo);
-    this.setState({
-      error,
-      errorInfo
-    });
+    this.setState({ errorInfo });
+    console.group('🚨 Error Boundary Caught Error');
+    console.error('Error:', error);
+    console.error('Error Info:', errorInfo);
+    console.error('Component Stack:', errorInfo.componentStack);
+    console.groupEnd();
+    if (process.env.NODE_ENV === 'production') {
+      this.reportError(error, errorInfo);
+    }
   }
 
+  reportError = (error, errorInfo) => {
+    const errorReport = {
+      errorId: this.state.errorId,
+      message: error.message,
+      stack: error.stack,
+      componentStack: errorInfo.componentStack,
+      url: window.location.href,
+      userAgent: navigator.userAgent,
+      timestamp: new Date().toISOString(),
+      retryCount: this.state.retryCount
+    };
+    console.log('Error report generated:', errorReport);
+  };
+
+  handleRetry = () => {
+    this.setState(prevState => ({
+      hasError: false,
+      error: null,
+      errorInfo: null,
+      retryCount: prevState.retryCount + 1
+    }));
+  };
+
   handleReset = () => {
+    try {
+      localStorage.removeItem('s3-config');
+      sessionStorage.clear();
+    } catch (e) {
+      console.warn('Could not clear storage:', e);
+    }
+
     this.setState({
       hasError: false,
       error: null,
-      errorInfo: null
+      errorInfo: null,
+      retryCount: 0
     });
-  }
+    window.location.reload();
+  };
+
+  handleReportBug = () => {
+    const bugReport = {
+      errorId: this.state.errorId,
+      error: this.state.error?.message,
+      timestamp: this.state.lastErrorTime?.toISOString(),
+      retryCount: this.state.retryCount,
+      url: window.location.href
+    };
+    navigator.clipboard.writeText(JSON.stringify(bugReport, null, 2)).then(() => {
+      alert('Bug report copied to clipboard! Please paste it when reporting the issue.');
+    });
+  };
 
   render() {
     if (this.state.hasError) {
+      const { error, errorId, retryCount, lastErrorTime } = this.state;
+      const isRecurringError = retryCount > 2;
+
       return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full text-center">
-            <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">
-              Something went wrong
-            </h2>
-            <p className="text-gray-600 mb-4">
-              An unexpected error occurred. You can try to recover or refresh the page.
-            </p>
+        <div className="min-h-screen bg-background flex items-center justify-center p-4">
+          <Card className="w-full max-w-2xl">
+            <CardHeader className="text-center">
+              <div className="flex justify-center mb-4">
+                <div className="relative">
+                  <div className="absolute inset-0 bg-destructive/20 rounded-full blur-xl"></div>
+                  <AlertTriangle className="relative w-16 h-16 text-destructive" />
+                </div>
+              </div>
+              <CardTitle className="text-2xl">
+                {isRecurringError ? 'Persistent Error Detected' : 'Something Went Wrong'}
+              </CardTitle>
+              <CardDescription className="text-base mt-2">
+                {isRecurringError
+                  ? 'The application has encountered repeated errors. This might indicate a more serious issue.'
+                  : 'The application encountered an unexpected error, but you can try to recover.'
+                }
+              </CardDescription>
+            </CardHeader>
 
-            <details className="mb-4 text-left">
-              <summary className="cursor-pointer text-sm text-gray-500 mb-2">
-                Error Details
-              </summary>
-              <pre className="text-xs bg-gray-100 p-2 rounded overflow-auto max-h-32">
-                {this.state.error.toString()}
-                {this.state.errorInfo?.componentStack}
-              </pre>
-            </details>
+            <CardContent className="space-y-6">
+              {/* Error Details */}
+              <div className="bg-muted/50 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-medium text-sm">Error Details</h4>
+                  <Badge variant="outline" className="font-mono text-xs">
+                    {errorId}
+                  </Badge>
+                </div>
+                <p className="text-sm text-muted-foreground mb-2">
+                  <strong>Message:</strong> {error?.message || 'Unknown error'}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  <strong>Time:</strong> {lastErrorTime?.toLocaleString()}
+                </p>
+                {retryCount > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    <strong>Retry Attempts:</strong> {retryCount}
+                  </p>
+                )}
+              </div>
 
-            <div className="flex gap-3 justify-center">
-              <button
-                onClick={this.handleReset}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-              >
-                Try Again
-              </button>
-              <button
-                onClick={() => window.location.reload()}
-                className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
-              >
-                Refresh Page
-              </button>
-            </div>
-          </div>
+              {/* Recovery Actions */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {!isRecurringError ? (
+                  <Button
+                    onClick={this.handleRetry}
+                    className="w-full"
+                    size="lg"
+                  >
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Try Again
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={this.handleReset}
+                    variant="destructive"
+                    className="w-full"
+                    size="lg"
+                  >
+                    <Home className="w-4 h-4 mr-2" />
+                    Reset Application
+                  </Button>
+                )}
+
+                <Button
+                  onClick={this.handleReportBug}
+                  variant="outline"
+                  className="w-full"
+                  size="lg"
+                >
+                  <Bug className="w-4 h-4 mr-2" />
+                  Report Bug
+                </Button>
+              </div>
+
+              {/* Recovery Tips */}
+              <div className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
+                <h4 className="font-medium text-blue-800 dark:text-blue-200 text-sm mb-2">
+                  💡 Recovery Tips
+                </h4>
+                <ul className="text-xs text-blue-700 dark:text-blue-300 space-y-1">
+                  <li>• Try refreshing the page if the error persists</li>
+                  <li>• Check your internet connection</li>
+                  <li>• Verify your AWS S3 credentials are still valid</li>
+                  <li>• Clear your browser cache if issues continue</li>
+                  {isRecurringError && (
+                    <li>• Consider updating your browser or trying a different one</li>
+                  )}
+                </ul>
+              </div>
+
+              {/* Technical Details (Development) */}
+              {process.env.NODE_ENV === 'development' && (
+                <details className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
+                  <summary className="cursor-pointer font-medium text-sm mb-2">
+                    Technical Details (Development)
+                  </summary>
+                  <div className="text-xs font-mono bg-gray-100 dark:bg-gray-800 p-3 rounded overflow-auto max-h-40">
+                    <div className="mb-2">
+                      <strong>Error Stack:</strong>
+                      <pre className="whitespace-pre-wrap mt-1">{error?.stack}</pre>
+                    </div>
+                    {this.state.errorInfo && (
+                      <div>
+                        <strong>Component Stack:</strong>
+                        <pre className="whitespace-pre-wrap mt-1">
+                          {this.state.errorInfo.componentStack}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                </details>
+              )}
+            </CardContent>
+          </Card>
         </div>
       );
     }
