@@ -1,8 +1,8 @@
-// components/FileBrowser/FileBrowser.jsx - Fixed with proper imports
+// components/FileBrowser/FileBrowser.jsx - Final Enhanced Version with shadcn Select
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Upload, Plus, ArrowLeft, AlertTriangle, Trash2, Home,
-  Search, Filter, RefreshCw, ArrowUp, ArrowDown
+  Search, Filter, RefreshCw, GripVertical, SlidersHorizontal
 } from 'lucide-react';
 
 // Hooks
@@ -16,7 +16,7 @@ import { useFolderOperations } from '../../hooks/useFolderOperations';
 // Components
 import LoadingSpinner from '../common/LoadingSpinner';
 import FileTable from './FileTable';
-import UploadModal from './UploadModal'; // Using the enhanced UploadModal
+import UploadModal from './UploadModal';
 import NewFolderModal from '../modal/NewFolderModal';
 import RenameModal from '../modal/RenameModal';
 import MoveModal from './MoveModal';
@@ -30,6 +30,14 @@ import {
   BreadcrumbList, BreadcrumbSeparator
 } from '../ui/breadcrumb';
 import { Badge } from '../ui/badge';
+import { Input } from '../ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../ui/select';
 
 export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
   // Core data state
@@ -58,7 +66,10 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
     toggleSelection,
     selectAll,
     clearSelection,
-    selectionInfo
+    selectionInfo,
+    selectionOptions,
+    handleSelectionChange,
+    getCurrentSelectionType
   } = useSelection();
 
   // Filtering and search hook
@@ -73,10 +84,16 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
     setSortOrder,
     filteredItems,
     clearFilters,
-    getFilteredCount
+    getFilteredCount,
+    filterOptions,
+    sortOptions,
+    getCurrentSortValue,
+    handleSortChange,
+    applyQuickFilter,
+    quickFilterOptions
   } = useFilteredItems(items);
 
-  // Load items function - MOVED BEFORE hooks that depend on it
+  // Load items function
   const loadItems = useCallback(async () => {
     await execute(async () => {
       const result = await s3Service.listObjects(currentPath, true);
@@ -85,7 +102,7 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
     });
   }, [currentPath, s3Service, execute, clearSelection]);
 
-  // File upload hook - NOW can use loadItems safely
+  // File upload hook
   const {
     showUpload,
     setShowUpload,
@@ -97,7 +114,7 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
     cancelAllUploads
   } = useFileUpload(s3Service, currentPath, loadItems);
 
-  // Folder operations hook - NOW can use loadItems safely
+  // Folder operations hook
   const {
     showNewFolder,
     showRename,
@@ -149,16 +166,6 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
       await createFolder(folderName);
     });
   }, [execute, createFolder]);
-
-  // Sort toggle function
-  // const toggleSort = useCallback((field) => {
-  //   if (sortBy === field) {
-  //     setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
-  //   } else {
-  //     setSortBy(field);
-  //     setSortOrder('asc');
-  //   }
-  // }, [sortBy, setSortBy, setSortOrder]);
 
   // Get filter count info
   const filterCount = getFilteredCount();
@@ -223,7 +230,7 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
         </div>
       </div>
 
-      {/* Toolbar */}
+      {/* Enhanced Toolbar */}
       <div className="bg-card border-b border-border py-4">
         <div className="max-w-7xl mx-auto px-4 space-y-4">
           {/* Top row - Action buttons */}
@@ -251,22 +258,25 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              {/* Selection Controls */}
               {filterCount.filtered > 0 && (
-                <>
-                  <Button
-                    variant="link"
-                    onClick={() => selectAll(filteredItems)}
-                    size="sm"
-                  >
-                    Select All ({filterCount.filtered})
-                  </Button>
-                  {selectionInfo.count > 0 && (
-                    <Button variant="link" onClick={clearSelection} size="sm">
-                      Clear Selection
-                    </Button>
-                  )}
-                </>
+                <Select
+                  value={getCurrentSelectionType(filteredItems)}
+                  onValueChange={(value) => handleSelectionChange(value, filteredItems)}
+                >
+                  <SelectTrigger className="w-[160px]">
+                    <SelectValue placeholder="Select..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {selectionOptions.map(option => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               )}
+
               {selectionInfo.count > 0 && (
                 <Button
                   variant="destructive"
@@ -282,80 +292,91 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
           </div>
 
           {/* Bottom row - Search, Filter, and Sort */}
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col lg:flex-row gap-3">
             {/* Search */}
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <input
+              <Input
                 type="text"
                 placeholder="Search files and folders..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                className="pl-10 pr-10"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                 >
                   ✕
                 </button>
               )}
             </div>
 
-            {/* Filter */}
+            {/* Filter with enhanced shadcn Select */}
             <div className="flex items-center space-x-2">
               <Filter className="w-4 h-4 text-muted-foreground" />
-              <select
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
-                className="px-3 py-2 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-              >
-                <option value="all">All Types</option>
-                <option value="folder">📁 Folders</option>
-                <option value="image">🖼️ Images</option>
-                <option value="video">🎥 Videos</option>
-                <option value="audio">🎵 Audio</option>
-                <option value="document">📄 Documents</option>
-                <option value="pdf">📕 PDF</option>
-                <option value="code">💻 Code</option>
-                <option value="archive">📦 Archives</option>
-                <option value="other">📎 Other</option>
-              </select>
+              <Select value={filterType} onValueChange={setFilterType}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Filter by type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {filterOptions.map(option => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.icon} {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
-            {/* Sort */}
-            {/* Sort - Updated to match filter dropdown */}
+            {/* Sort with enhanced shadcn Select */}
             <div className="flex items-center space-x-2">
-              <span className="text-sm text-muted-foreground">Sort:</span>
-              <select
-                value={`${sortBy}-${sortOrder}`}
-                onChange={(e) => {
-                  const [field, order] = e.target.value.split('-');
-                  setSortBy(field);
-                  setSortOrder(order);
-                }}
-                className="px-3 py-2 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent min-w-[120px]"
+              <GripVertical className="w-4 h-4 text-muted-foreground" />
+              <Select
+                value={getCurrentSortValue()}
+                onValueChange={handleSortChange}
               >
-                <option value="name-asc">Name ↑</option>
-                <option value="name-desc">Name ↓</option>
-                <option value="size-asc">Size ↑</option>
-                <option value="size-desc">Size ↓</option>
-                <option value="date-asc">Date ↑</option>
-                <option value="date-desc">Date ↓</option>
-              </select>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  {sortOptions.map(option => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
-            {/* Clear filters */}
+            {/* Quick Filters */}
+            <div className="flex items-center space-x-2">
+              <SlidersHorizontal className="w-4 h-4 text-muted-foreground" />
+              <Select onValueChange={applyQuickFilter}>
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue placeholder="Quick filters" />
+                </SelectTrigger>
+                <SelectContent>
+                  {quickFilterOptions.map(option => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Clear filters - matching button size */}
             {isFiltered && (
-              <Button variant="outline" size="sm" onClick={clearFilters}>
+              <Button variant="outline" size="default" onClick={clearFilters}>
                 Clear Filters
               </Button>
             )}
 
             {/* Results info */}
             {isFiltered && (
-              <div className="text-sm text-muted-foreground self-center">
+              <div className="text-sm text-muted-foreground self-center whitespace-nowrap">
                 {filterCount.filtered} of {filterCount.total} items
               </div>
             )}

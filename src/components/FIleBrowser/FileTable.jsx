@@ -1,7 +1,7 @@
-// components/FileBrowser/FileTable.jsx - Complete Updated Version
+// components/FileBrowser/FileTable.jsx - Updated with visible drag handle and shadcn Select
 import React, { useCallback, useState } from "react";
 import {
-  Download, Eye, Folder, Trash2, MoreHorizontal, FileText, Image, Archive, Music, Video, Code, FileIcon, Loader2, Edit2, Move, Copy, Share2
+  Download, Eye, Folder, Trash2, MoreHorizontal, FileText, Image, Archive, Music, Video, Code, FileIcon, Loader2, Edit2, Move, Copy, Share2, GripVertical
 } from "lucide-react";
 import { Button } from "../ui/button";
 import {
@@ -13,6 +13,13 @@ import {
 } from "../ui/dropdown-menu";
 import { Badge } from "../ui/badge";
 import { Checkbox } from "../ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
 import { formatDate, formatFileSize } from "../../utils";
 import FilePreviewModal from "../preview/FilePreviewModal";
 
@@ -68,10 +75,11 @@ function FileTable({
   const [hoveredRow, setHoveredRow] = useState(null);
   const [previewFile, setPreviewFile] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [bulkAction, setBulkAction] = useState('');
 
   const handleRowClick = useCallback(
     (item, e) => {
-      if (e.target.closest("button") || e.target.closest("[role='checkbox']")) return;
+      if (e.target.closest("button") || e.target.closest("[role='checkbox']") || e.target.closest(".drag-handle")) return;
 
       if (item.type === "folder") {
         onNavigateToFolder(item.fullPath);
@@ -111,6 +119,31 @@ function FileTable({
     [onNavigateToFolder, onDownloadFile]
   );
 
+  const handleBulkAction = useCallback((action) => {
+    const selectedPaths = Array.from(selectedItems);
+    if (selectedPaths.length === 0) return;
+
+    switch (action) {
+      case 'download':
+        // Download each selected file
+        allItems.filter(item => selectedItems.has(item.fullPath) && item.type === 'file')
+          .forEach(file => onDownloadFile(file));
+        break;
+      case 'delete':
+        onDeleteItems(selectedPaths);
+        break;
+      case 'move':
+        // For bulk move, we'd need to handle multiple items
+        // For now, just move the first selected item
+        const firstSelected = allItems.find(item => selectedItems.has(item.fullPath));
+        if (firstSelected) onMoveItem(firstSelected);
+        break;
+      default:
+        break;
+    }
+    setBulkAction('');
+  }, [selectedItems, onDownloadFile, onDeleteItems, onMoveItem]);
+
   const allItems = [...items.folders, ...items.files];
 
   if (!allItems.length) {
@@ -139,11 +172,42 @@ function FileTable({
   return (
     <>
       <div className="bg-card rounded-xl border border-border overflow-hidden shadow-sm">
+        {/* Bulk Actions Bar */}
+        {selectedItems.size > 0 && (
+          <div className="bg-muted/20 border-b border-border px-6 py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <Badge variant="default" className="bg-primary/10 text-primary border-primary/20">
+                  {selectedItems.size} selected
+                </Badge>
+                <span className="text-sm text-muted-foreground">
+                  Bulk actions:
+                </span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Select value={bulkAction} onValueChange={handleBulkAction}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Choose action..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="download">📥 Download All</SelectItem>
+                    <SelectItem value="move">📁 Move All</SelectItem>
+                    <SelectItem value="delete">🗑️ Delete All</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Table Container */}
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/30 hover:bg-muted/30 border-b border-border">
+                <TableHead className="w-8 px-2">
+                  <GripVertical className="w-4 h-4 text-muted-foreground" />
+                </TableHead>
                 <TableHead className="w-12 px-4">
                   <Checkbox
                     checked={selectedItems.size === allItems.length && allItems.length > 0}
@@ -188,6 +252,14 @@ function FileTable({
                     aria-label={`${isFolder ? "Folder" : "File"}: ${item.name}`}
                     data-selected={isSelected}
                   >
+                    {/* Drag Handle */}
+                    <TableCell className="px-2">
+                      <div className="drag-handle cursor-grab active:cursor-grabbing p-1 rounded hover:bg-muted/50 transition-colors">
+                        <GripVertical className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                      </div>
+                    </TableCell>
+
+                    {/* Selection Checkbox */}
                     <TableCell className="px-4">
                       <Checkbox
                         checked={isSelected}
@@ -197,6 +269,7 @@ function FileTable({
                       />
                     </TableCell>
 
+                    {/* Name Column */}
                     <TableCell className="py-3">
                       <div className="flex items-center space-x-3 min-w-0">
                         <div className="relative flex-shrink-0">
@@ -229,6 +302,7 @@ function FileTable({
                       </div>
                     </TableCell>
 
+                    {/* Size Column */}
                     <TableCell className="text-sm text-muted-foreground font-mono">
                       {isFolder ? (
                         item.loading ? (
@@ -256,6 +330,7 @@ function FileTable({
                       )}
                     </TableCell>
 
+                    {/* Modified Column */}
                     <TableCell className="text-sm text-muted-foreground">
                       {isFolder ? (
                         item.loading ? (
@@ -277,6 +352,7 @@ function FileTable({
                       )}
                     </TableCell>
 
+                    {/* Actions Column */}
                     <TableCell>
                       <div className="flex items-center justify-end space-x-1">
                         {/* Preview/Open button */}
@@ -463,7 +539,7 @@ function FileTable({
           </Table>
         </div>
 
-        {/* Enhanced Footer - Clean version without preview badges */}
+        {/* Enhanced Footer */}
         <div className="bg-muted/20 px-6 py-4 border-t border-border">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">

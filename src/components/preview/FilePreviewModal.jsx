@@ -1,13 +1,16 @@
-// components/preview/FilePreviewModal.jsx - Complete Enhanced Version
+// components/preview/FilePreviewModal.jsx - Clean version with react-quick-pinch-zoom
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Download, ExternalLink, ZoomIn, ZoomOut, RotateCw, RotateCcw,
   FileText, Image as ImageIcon, Video, Music, File,
-  AlertCircle, Loader2, Hand, Move
+  AlertCircle, Loader2, Maximize, RefreshCw
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
+
+// Import the pinch-zoom library (default export)
+import QuickPinchZoom, { make3dTransformValue } from 'react-quick-pinch-zoom';
 
 // File type detection
 const getFileCategory = (fileName) => {
@@ -31,270 +34,138 @@ const getFileCategory = (fileName) => {
   return 'other';
 };
 
-// Enhanced Image Preview Component with Pan & Zoom
+// Enhanced Image Preview with react-quick-pinch-zoom
 const ImagePreview = ({ url, fileName }) => {
-  const [zoom, setZoom] = useState(1);
-  const [rotation, setRotation] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
-  const [containerDimensions, setContainerDimensions] = useState({ width: 0, height: 0 });
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
+  const [rotation, setRotation] = useState(0);
 
-  const containerRef = useRef(null);
   const imageRef = useRef(null);
 
-  // Calculate fit-to-container zoom
-  const calculateFitZoom = useCallback((imgWidth, imgHeight, containerWidth, containerHeight) => {
-    if (!imgWidth || !imgHeight || !containerWidth || !containerHeight) return 1;
-
-    const padding = 80;
-    const scaleX = (containerWidth - padding) / imgWidth;
-    const scaleY = (containerHeight - padding) / imgHeight;
-    return Math.min(scaleX, scaleY, 1);
-  }, []);
-
-  // Update container dimensions on resize
-  useEffect(() => {
-    const updateContainerSize = () => {
-      if (containerRef.current) {
-        const rect = containerRef.current.getBoundingClientRect();
-        setContainerDimensions({ width: rect.width, height: rect.height });
-      }
-    };
-
-    updateContainerSize();
-    window.addEventListener('resize', updateContainerSize);
-    return () => window.removeEventListener('resize', updateContainerSize);
-  }, []);
-
-  // Reset pan when zoom changes or image loads
-  useEffect(() => {
-    setPan({ x: 0, y: 0 });
-  }, [zoom, rotation, imageDimensions]);
-
-  const handleImageLoad = useCallback((e) => {
-    const img = e.target;
-    const container = containerRef.current;
-
-    if (!container) return;
-
-    const containerRect = container.getBoundingClientRect();
-    setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight });
-    setContainerDimensions({ width: containerRect.width, height: containerRect.height });
-
-    // Calculate and set fit zoom
-    const fitZoom = calculateFitZoom(
-      img.naturalWidth,
-      img.naturalHeight,
-      containerRect.width,
-      containerRect.height
-    );
-    setZoom(fitZoom);
-    setPan({ x: 0, y: 0 });
+  const handleImageLoad = useCallback(() => {
     setLoading(false);
-  }, [calculateFitZoom]);
+  }, []);
 
-  const handleZoomIn = () => setZoom(prev => Math.min(prev * 1.5, 5));
-  const handleZoomOut = () => setZoom(prev => Math.max(prev / 1.5, 0.1));
-  const handleRotate = () => setRotation(prev => (prev + 90) % 360);
-  const handleRotateCounter = () => setRotation(prev => (prev - 90 + 360) % 360);
+  const handleImageError = useCallback(() => {
+    setLoading(false);
+    setError(true);
+  }, []);
 
-  const handleFitToContainer = () => {
-    const fitZoom = calculateFitZoom(
-      imageDimensions.width,
-      imageDimensions.height,
-      containerDimensions.width,
-      containerDimensions.height
-    );
-    setZoom(fitZoom);
-    setPan({ x: 0, y: 0 });
-    setRotation(0);
-  };
+  // Handle updates from the library
+  const handleUpdate = useCallback(({ x, y, scale }) => {
+    const { current: img } = imageRef;
+    if (img) {
+      const value = make3dTransformValue({ x, y, scale });
+      img.style.setProperty("transform", `${value} rotate(${rotation}deg)`);
+      setTransform({ x, y, scale });
+    }
+  }, [rotation]);
 
-  const handleActualSize = () => {
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
-    setRotation(0);
-  };
-
-  const handleFillContainer = () => {
-    if (!imageDimensions.width || !imageDimensions.height || !containerDimensions.width || !containerDimensions.height) return;
-
-    const padding = 80;
-    const scaleX = (containerDimensions.width - padding) / imageDimensions.width;
-    const scaleY = (containerDimensions.height - padding) / imageDimensions.height;
-    const fillZoom = Math.max(scaleX, scaleY);
-
-    setZoom(fillZoom);
-    setPan({ x: 0, y: 0 });
-  };
-
-  // Mouse event handlers for panning
-  const handleMouseDown = (e) => {
-    if (zoom <= 1.1) return;
-
-    e.preventDefault();
-    setIsDragging(true);
-    setDragStart({
-      x: e.clientX - pan.x,
-      y: e.clientY - pan.y
+  // Manual zoom controls (simulate touch events)
+  const zoomIn = useCallback(() => {
+    const newScale = Math.min(transform.scale * 1.5, 5);
+    const value = make3dTransformValue({
+      x: transform.x,
+      y: transform.y,
+      scale: newScale
     });
-  };
+    if (imageRef.current) {
+      imageRef.current.style.setProperty("transform", `${value} rotate(${rotation}deg)`);
+      setTransform(prev => ({ ...prev, scale: newScale }));
+    }
+  }, [transform, rotation]);
 
-  const handleMouseMove = (e) => {
-    if (!isDragging || zoom <= 1.1) return;
-
-    e.preventDefault();
-    const newPan = {
-      x: e.clientX - dragStart.x,
-      y: e.clientY - dragStart.y
-    };
-
-    // Constrain panning
-    const scaledWidth = imageDimensions.width * zoom;
-    const scaledHeight = imageDimensions.height * zoom;
-    const maxPanX = Math.max(0, (scaledWidth - containerDimensions.width) / 2);
-    const maxPanY = Math.max(0, (scaledHeight - containerDimensions.height) / 2);
-
-    newPan.x = Math.max(-maxPanX, Math.min(maxPanX, newPan.x));
-    newPan.y = Math.max(-maxPanY, Math.min(maxPanY, newPan.y));
-
-    setPan(newPan);
-  };
-
-  const handleMouseUp = () => setIsDragging(false);
-
-  // Touch events for mobile
-  const handleTouchStart = (e) => {
-    if (zoom <= 1.1 || e.touches.length !== 1) return;
-
-    e.preventDefault();
-    const touch = e.touches[0];
-    setIsDragging(true);
-    setDragStart({
-      x: touch.clientX - pan.x,
-      y: touch.clientY - pan.y
+  const zoomOut = useCallback(() => {
+    const newScale = Math.max(transform.scale / 1.5, 0.5);
+    const value = make3dTransformValue({
+      x: transform.x,
+      y: transform.y,
+      scale: newScale
     });
-  };
+    if (imageRef.current) {
+      imageRef.current.style.setProperty("transform", `${value} rotate(${rotation}deg)`);
+      setTransform(prev => ({ ...prev, scale: newScale }));
+    }
+  }, [transform, rotation]);
 
-  const handleTouchMove = (e) => {
-    if (!isDragging || zoom <= 1.1 || e.touches.length !== 1) return;
+  const resetZoom = useCallback(() => {
+    const value = make3dTransformValue({ x: 0, y: 0, scale: 1 });
+    if (imageRef.current) {
+      imageRef.current.style.setProperty("transform", `${value} rotate(0deg)`);
+      setTransform({ x: 0, y: 0, scale: 1 });
+      setRotation(0);
+    }
+  }, []);
 
-    e.preventDefault();
-    const touch = e.touches[0];
-    const newPan = {
-      x: touch.clientX - dragStart.x,
-      y: touch.clientY - dragStart.y
-    };
+  const fitToScreen = useCallback(() => {
+    // Reset to scale 1 (library will auto-fit)
+    const value = make3dTransformValue({ x: 0, y: 0, scale: 1 });
+    if (imageRef.current) {
+      imageRef.current.style.setProperty("transform", `${value} rotate(${rotation}deg)`);
+      setTransform({ x: 0, y: 0, scale: 1 });
+    }
+  }, [rotation]);
 
-    const scaledWidth = imageDimensions.width * zoom;
-    const scaledHeight = imageDimensions.height * zoom;
-    const maxPanX = Math.max(0, (scaledWidth - containerDimensions.width) / 2);
-    const maxPanY = Math.max(0, (scaledHeight - containerDimensions.height) / 2);
+  const rotate = useCallback(() => {
+    const newRotation = (rotation + 90) % 360;
+    const value = make3dTransformValue(transform);
+    if (imageRef.current) {
+      imageRef.current.style.setProperty("transform", `${value} rotate(${newRotation}deg)`);
+      setRotation(newRotation);
+    }
+  }, [transform, rotation]);
 
-    newPan.x = Math.max(-maxPanX, Math.min(maxPanX, newPan.x));
-    newPan.y = Math.max(-maxPanY, Math.min(maxPanY, newPan.y));
-
-    setPan(newPan);
-  };
-
-  const handleTouchEnd = () => setIsDragging(false);
-
-  // Wheel zoom
-  const handleWheel = (e) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    setZoom(prev => Math.max(0.1, Math.min(5, prev * delta)));
-  };
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    container.addEventListener('mousemove', handleMouseMove);
-    container.addEventListener('mouseup', handleMouseUp);
-    container.addEventListener('mouseleave', handleMouseUp);
-    container.addEventListener('touchmove', handleTouchMove, { passive: false });
-    container.addEventListener('touchend', handleTouchEnd);
-    container.addEventListener('wheel', handleWheel, { passive: false });
-
-    return () => {
-      container.removeEventListener('mousemove', handleMouseMove);
-      container.removeEventListener('mouseup', handleMouseUp);
-      container.removeEventListener('mouseleave', handleMouseUp);
-      container.removeEventListener('touchmove', handleTouchMove);
-      container.removeEventListener('touchend', handleTouchEnd);
-      container.removeEventListener('wheel', handleWheel);
-    };
-  }, [isDragging, dragStart, pan, zoom, imageDimensions, containerDimensions]);
-
-  const canPan = zoom > 1.1;
-  const cursorStyle = canPan ? (isDragging ? 'grabbing' : 'grab') : 'default';
+  const zoomPercentage = Math.round(transform.scale * 100);
 
   return (
-    <div className="relative w-full h-full flex flex-col">
-      {/* Enhanced Image Controls */}
-      <div className="flex items-center justify-between p-4 border-b bg-muted/20 flex-shrink-0">
+    <div className="w-full h-full flex flex-col bg-gray-50 dark:bg-gray-900">
+      {/* Enhanced Controls */}
+      <div className="flex items-center justify-between p-4 bg-background/95 backdrop-blur-sm border-b flex-shrink-0">
         <div className="flex items-center space-x-2">
-          <Button variant="outline" size="sm" onClick={handleZoomOut}>
+          <Button variant="outline" size="sm" onClick={zoomOut} disabled={transform.scale <= 0.5}>
             <ZoomOut className="w-4 h-4" />
           </Button>
-          <span className="text-sm font-mono min-w-[60px] text-center">
-            {Math.round(zoom * 100)}%
-          </span>
-          <Button variant="outline" size="sm" onClick={handleZoomIn}>
+
+          <Badge variant="outline" className="min-w-[70px] font-mono text-center">
+            {zoomPercentage}%
+          </Badge>
+
+          <Button variant="outline" size="sm" onClick={zoomIn} disabled={transform.scale >= 5}>
             <ZoomIn className="w-4 h-4" />
           </Button>
 
           <div className="w-px h-6 bg-border mx-2" />
 
-          <Button variant="outline" size="sm" onClick={handleRotateCounter}>
-            <RotateCcw className="w-4 h-4" />
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleRotate}>
+          <Button variant="outline" size="sm" onClick={rotate}>
             <RotateCw className="w-4 h-4" />
           </Button>
 
           <div className="w-px h-6 bg-border mx-2" />
 
-          <Button variant="outline" size="sm" onClick={handleFitToContainer}>
+          <Button variant="outline" size="sm" onClick={fitToScreen}>
+            <Maximize className="w-4 h-4 mr-1" />
             Fit
           </Button>
-          <Button variant="outline" size="sm" onClick={handleFillContainer}>
-            Fill
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleActualSize}>
-            100%
+
+          <Button variant="outline" size="sm" onClick={resetZoom}>
+            <RefreshCw className="w-4 h-4 mr-1" />
+            Reset
           </Button>
         </div>
 
         <div className="flex items-center space-x-4">
-          {canPan && (
-            <div className="flex items-center space-x-1 text-sm text-muted-foreground">
-              <Hand className="w-4 h-4" />
-              <span>Drag to pan</span>
-            </div>
-          )}
           <div className="text-sm text-muted-foreground">
-            {imageDimensions.width} × {imageDimensions.height}
+            Pinch to zoom • Drag to pan
           </div>
         </div>
       </div>
 
-      {/* Full-Size Image Container */}
-      <div
-        ref={containerRef}
-        className="flex-1 overflow-hidden bg-gray-50 dark:bg-gray-900 flex items-center justify-center relative"
-        style={{ cursor: cursorStyle }}
-        onMouseDown={handleMouseDown}
-        onTouchStart={handleTouchStart}
-      >
+      {/* Image Container with QuickPinchZoom */}
+      <div className="flex-1 relative overflow-hidden bg-gray-50 dark:bg-gray-900">
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center z-10">
-            <div className="flex items-center space-x-2 text-muted-foreground">
+            <div className="flex flex-col items-center space-y-3 text-muted-foreground">
               <Loader2 className="w-8 h-8 animate-spin" />
               <span>Loading image...</span>
             </div>
@@ -303,44 +174,45 @@ const ImagePreview = ({ url, fileName }) => {
 
         {error && (
           <div className="absolute inset-0 flex items-center justify-center z-10">
-            <div className="flex flex-col items-center space-y-2 text-muted-foreground">
+            <div className="flex flex-col items-center space-y-3 text-muted-foreground">
               <AlertCircle className="w-12 h-12" />
               <span>Failed to load image</span>
             </div>
           </div>
         )}
 
-        <img
-          ref={imageRef}
-          src={url}
-          alt={fileName}
-          className="max-w-none select-none transition-transform duration-200"
+        <QuickPinchZoom
+          onUpdate={handleUpdate}
+          tapZoomFactor={2}
+          doubleTapZoomOutOnMaxScale={true}
+          doubleTapToggleZoom={true}
+          minZoom={0.5}
+          maxZoom={5}
+          centerContained={true}
+          wheelScaleFactor={1500}
           style={{
-            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom}) rotate(${rotation}deg)`,
-            display: loading || error ? 'none' : 'block',
-            transformOrigin: 'center center'
+            width: '100%',
+            height: '100%',
+            display: loading || error ? 'none' : 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
           }}
-          onLoad={handleImageLoad}
-          onError={() => {
-            setLoading(false);
-            setError(true);
-          }}
-          draggable={false}
-        />
-
-        {/* Pan indicator */}
-        {canPan && !loading && !error && (
-          <div className="absolute bottom-4 left-4 bg-black/50 text-white px-2 py-1 rounded text-xs">
-            {isDragging ? 'Panning...' : 'Scroll wheel to zoom • Drag to pan'}
-          </div>
-        )}
-
-        {/* Zoom indicator */}
-        {zoom !== 1 && !loading && !error && (
-          <div className="absolute top-4 right-4 bg-black/50 text-white px-2 py-1 rounded text-xs">
-            {Math.round(zoom * 100)}%
-          </div>
-        )}
+        >
+          <img
+            ref={imageRef}
+            src={url}
+            alt={fileName}
+            onLoad={handleImageLoad}
+            onError={handleImageError}
+            style={{
+              maxWidth: '100%',
+              maxHeight: '100%',
+              objectFit: 'contain',
+              userSelect: 'none'
+            }}
+            draggable={false}
+          />
+        </QuickPinchZoom>
       </div>
     </div>
   );
@@ -729,7 +601,6 @@ const FilePreviewModal = ({
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-7xl max-h-[95vh] w-[95vw] flex flex-col p-0">
-        {/* Clean header without duplicate X button */}
         <DialogHeader className="flex-shrink-0 p-6 pb-0">
           <div className="flex items-center justify-between">
             <div>
@@ -747,7 +618,6 @@ const FilePreviewModal = ({
               </div>
             </div>
 
-            {/* Single download button */}
             <Button variant="outline" size="sm" onClick={handleDownload}>
               <Download className="w-4 h-4 mr-2" />
               Download

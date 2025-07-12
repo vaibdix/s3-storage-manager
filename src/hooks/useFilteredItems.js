@@ -1,3 +1,4 @@
+// hooks/useFilteredItems.js - Updated with shadcn Select support
 import { useState, useMemo, useCallback } from 'react';
 
 const FILE_TYPE_EXTENSIONS = {
@@ -72,13 +73,18 @@ export const useFilteredItems = (items) => {
           const dateB = b.lastModified ? new Date(b.lastModified) : new Date(0);
           comparison = dateA - dateB;
           break;
+        case 'type':
+          const typeA = a.type === 'folder' ? 'folder' : getFileType(a.name);
+          const typeB = b.type === 'folder' ? 'folder' : getFileType(b.name);
+          comparison = typeA.localeCompare(typeB);
+          break;
         default:
           comparison = 0;
       }
 
       return sortOrder === 'desc' ? -comparison : comparison;
     });
-  }, []);
+  }, [getFileType]);
 
   const filteredItems = useMemo(() => {
     let folders = [...(items.folders || [])];
@@ -110,18 +116,146 @@ export const useFilteredItems = (items) => {
     return { total, filtered };
   }, [items, filteredItems]);
 
+  // Filter type options for shadcn Select
+  const filterOptions = useMemo(() => [
+    { value: 'all', label: 'All Types', icon: '📁' },
+    { value: 'folder', label: 'Folders', icon: '📁' },
+    { value: 'image', label: 'Images', icon: '🖼️' },
+    { value: 'video', label: 'Videos', icon: '🎥' },
+    { value: 'audio', label: 'Audio', icon: '🎵' },
+    { value: 'document', label: 'Documents', icon: '📄' },
+    { value: 'pdf', label: 'PDF', icon: '📕' },
+    { value: 'code', label: 'Code', icon: '💻' },
+    { value: 'archive', label: 'Archives', icon: '📦' },
+    { value: 'other', label: 'Other', icon: '📎' }
+  ], []);
+
+  // Sort options for shadcn Select
+  const sortOptions = useMemo(() => [
+    { value: 'name-asc', label: 'Name ↑', field: 'name', order: 'asc' },
+    { value: 'name-desc', label: 'Name ↓', field: 'name', order: 'desc' },
+    { value: 'size-asc', label: 'Size ↑', field: 'size', order: 'asc' },
+    { value: 'size-desc', label: 'Size ↓', field: 'size', order: 'desc' },
+    { value: 'date-asc', label: 'Date ↑', field: 'date', order: 'asc' },
+    { value: 'date-desc', label: 'Date ↓', field: 'date', order: 'desc' },
+    { value: 'type-asc', label: 'Type ↑', field: 'type', order: 'asc' },
+    { value: 'type-desc', label: 'Type ↓', field: 'type', order: 'desc' }
+  ], []);
+
+  // Handle sort change from select value
+  const handleSortChange = useCallback((value) => {
+    const option = sortOptions.find(opt => opt.value === value);
+    if (option) {
+      setSortBy(option.field);
+      setSortOrder(option.order);
+    }
+  }, [sortOptions]);
+
+  // Get current sort value for select
+  const getCurrentSortValue = useCallback(() => {
+    return `${sortBy}-${sortOrder}`;
+  }, [sortBy, sortOrder]);
+
+  // Get current filter label with icon
+  const getCurrentFilterLabel = useCallback(() => {
+    const option = filterOptions.find(opt => opt.value === filterType);
+    return option ? `${option.icon} ${option.label}` : 'All Types';
+  }, [filterType, filterOptions]);
+
+  // Get current sort label
+  const getCurrentSortLabel = useCallback(() => {
+    const option = sortOptions.find(opt => opt.value === getCurrentSortValue());
+    return option ? option.label : 'Name ↑';
+  }, [getCurrentSortValue, sortOptions]);
+
+  // Quick filter presets
+  const applyQuickFilter = useCallback((preset) => {
+    switch (preset) {
+      case 'recent':
+        setSortBy('date');
+        setSortOrder('desc');
+        setFilterType('all');
+        break;
+      case 'large-files':
+        setSortBy('size');
+        setSortOrder('desc');
+        setFilterType('all');
+        break;
+      case 'images-only':
+        setFilterType('image');
+        setSortBy('name');
+        setSortOrder('asc');
+        break;
+      case 'documents-only':
+        setFilterType('document');
+        setSortBy('name');
+        setSortOrder('asc');
+        break;
+      default:
+        break;
+    }
+  }, []);
+
+  const quickFilterOptions = useMemo(() => [
+    { value: 'recent', label: '🕒 Recent Files' },
+    { value: 'large-files', label: '📊 Large Files' },
+    { value: 'images-only', label: '🖼️ Images Only' },
+    { value: 'documents-only', label: '📄 Documents Only' }
+  ], []);
+
+  // Advanced filtering
+  const getFilterStats = useCallback(() => {
+    const allItems = [...(items.folders || []), ...(items.files || [])];
+    const stats = {
+      total: allItems.length,
+      folders: items.folders?.length || 0,
+      files: items.files?.length || 0,
+      byType: {}
+    };
+
+    // Count by file type
+    (items.files || []).forEach(file => {
+      const type = getFileType(file.name);
+      stats.byType[type] = (stats.byType[type] || 0) + 1;
+    });
+
+    return stats;
+  }, [items, getFileType]);
+
   return {
+    // Search state
     searchQuery,
     setSearchQuery,
+
+    // Filter state
     filterType,
     setFilterType,
+
+    // Sort state
     sortBy,
     setSortBy,
     sortOrder,
     setSortOrder,
+
+    // Computed values
     filteredItems,
     getFileType,
+
+    // Actions
     clearFilters,
-    getFilteredCount
+    getFilteredCount,
+    applyQuickFilter,
+    handleSortChange,
+
+    // Shadcn Select options
+    filterOptions,
+    sortOptions,
+    quickFilterOptions,
+    getCurrentSortValue,
+    getCurrentFilterLabel,
+    getCurrentSortLabel,
+
+    // Stats
+    getFilterStats
   };
 };
