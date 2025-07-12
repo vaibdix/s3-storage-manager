@@ -407,6 +407,7 @@ export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
             onRenameItem={openRenameModal}
             onMoveItem={openMoveModal}
             onShareItem={openShareModal}
+            s3Service={s3Service}
           />
         )}
       </main>
