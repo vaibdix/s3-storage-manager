@@ -1,4 +1,4 @@
-// components/preview/FilePreviewModal.jsx - Clean version with react-quick-pinch-zoom
+// components/preview/FilePreviewModal.jsx - FINAL WORKING VERSION with guaranteed scrolling
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Download, ExternalLink, ZoomIn, ZoomOut, RotateCw, RotateCcw,
@@ -11,6 +11,8 @@ import { Badge } from '../ui/badge';
 
 // Import the pinch-zoom library (default export)
 import QuickPinchZoom, { make3dTransformValue } from 'react-quick-pinch-zoom';
+// Import Shiki service
+import { shikiService } from '../../services/ShikiService';
 
 // File type detection
 const getFileCategory = (fileName) => {
@@ -62,7 +64,7 @@ const ImagePreview = ({ url, fileName }) => {
     }
   }, [rotation]);
 
-  // Manual zoom controls (simulate touch events)
+  // Manual zoom controls
   const zoomIn = useCallback(() => {
     const newScale = Math.min(transform.scale * 1.5, 5);
     const value = make3dTransformValue({
@@ -99,7 +101,6 @@ const ImagePreview = ({ url, fileName }) => {
   }, []);
 
   const fitToScreen = useCallback(() => {
-    // Reset to scale 1 (library will auto-fit)
     const value = make3dTransformValue({ x: 0, y: 0, scale: 1 });
     if (imageRef.current) {
       imageRef.current.style.setProperty("transform", `${value} rotate(${rotation}deg)`);
@@ -119,9 +120,12 @@ const ImagePreview = ({ url, fileName }) => {
   const zoomPercentage = Math.round(transform.scale * 100);
 
   return (
-    <div className="w-full h-full flex flex-col bg-gray-50 dark:bg-gray-900">
-      {/* Enhanced Controls */}
-      <div className="flex items-center justify-between p-4 bg-background/95 backdrop-blur-sm border-b flex-shrink-0">
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* Controls */}
+      <div
+        className="flex items-center justify-between p-4 bg-background/95 backdrop-blur-sm border-b"
+        style={{ flexShrink: 0 }}
+      >
         <div className="flex items-center space-x-2">
           <Button variant="outline" size="sm" onClick={zoomOut} disabled={transform.scale <= 0.5}>
             <ZoomOut className="w-4 h-4" />
@@ -154,15 +158,13 @@ const ImagePreview = ({ url, fileName }) => {
           </Button>
         </div>
 
-        <div className="flex items-center space-x-4">
-          <div className="text-sm text-muted-foreground">
-            Pinch to zoom • Drag to pan
-          </div>
+        <div className="text-sm text-muted-foreground">
+          Pinch to zoom • Drag to pan
         </div>
       </div>
 
-      {/* Image Container with QuickPinchZoom */}
-      <div className="flex-1 relative overflow-hidden bg-gray-50 dark:bg-gray-900">
+      {/* Image Container */}
+      <div style={{ flex: 1, position: 'relative', overflow: 'hidden', minHeight: 0 }}>
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center z-10">
             <div className="flex flex-col items-center space-y-3 text-muted-foreground">
@@ -218,12 +220,17 @@ const ImagePreview = ({ url, fileName }) => {
   );
 };
 
-// Code Preview Component
+// WORKING CodePreview with guaranteed scrolling
 const CodePreview = ({ url, fileName }) => {
   const [content, setContent] = useState('');
+  const [highlightedCode, setHighlightedCode] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [theme, setTheme] = useState('github-dark');
+  const [copied, setCopied] = useState(false);
+  const [language, setLanguage] = useState('');
 
+  // Fetch file content
   useEffect(() => {
     const fetchContent = async () => {
       try {
@@ -231,28 +238,87 @@ const CodePreview = ({ url, fileName }) => {
         if (!response.ok) throw new Error('Failed to fetch file');
         const text = await response.text();
         setContent(text);
+
+        const detectedLang = shikiService.getLanguageFromFileName(fileName);
+        setLanguage(detectedLang);
       } catch (err) {
         setError(err.message);
-      } finally {
         setLoading(false);
       }
     };
 
     fetchContent();
-  }, [url]);
+  }, [url, fileName]);
+
+  // Highlight code
+  useEffect(() => {
+    if (!content) return;
+
+    const highlightCode = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        let result;
+        try {
+          result = await shikiService.highlightCodeShorthand(content, fileName, theme);
+        } catch (shorthandError) {
+          result = await shikiService.highlightCode(content, fileName, theme);
+        }
+
+        if (result.success) {
+          setHighlightedCode(result.html);
+        } else {
+          const escapedContent = content
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+
+          setHighlightedCode(`<pre style="margin: 0; padding: 1rem; background: #1e1e1e; color: #d4d4d4; font-family: monospace; white-space: pre; overflow: visible;"><code>${escapedContent}</code></pre>`);
+        }
+
+        setLoading(false);
+      } catch (err) {
+        console.error('Code highlighting failed:', err);
+        const escapedContent = content
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+        setHighlightedCode(`<pre style="margin: 0; padding: 1rem; background: #1e1e1e; color: #d4d4d4; font-family: monospace; white-space: pre; overflow: visible;"><code>${escapedContent}</code></pre>`);
+        setError('Syntax highlighting unavailable');
+        setLoading(false);
+      }
+    };
+
+    highlightCode();
+  }, [content, fileName, theme]);
+
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="flex items-center space-x-2">
           <Loader2 className="w-6 h-6 animate-spin" />
-          <span>Loading file...</span>
+          <span>Loading code...</span>
         </div>
       </div>
     );
   }
 
-  if (error) {
+  if (error && !highlightedCode) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="flex flex-col items-center space-y-2 text-muted-foreground">
@@ -263,34 +329,69 @@ const CodePreview = ({ url, fileName }) => {
     );
   }
 
-  const getLanguage = (fileName) => {
-    const ext = fileName.split('.').pop()?.toLowerCase();
-    const langMap = {
-      js: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript',
-      py: 'python', java: 'java', cpp: 'cpp', c: 'c', php: 'php',
-      rb: 'ruby', go: 'go', rs: 'rust', swift: 'swift',
-      html: 'html', css: 'css', scss: 'scss', sass: 'sass',
-      json: 'json', xml: 'xml', yml: 'yaml', yaml: 'yaml',
-      md: 'markdown', sql: 'sql', sh: 'bash'
-    };
-    return langMap[ext] || 'text';
-  };
+  const lineCount = content.split('\n').length;
+  const charCount = content.length;
 
   return (
-    <div className="w-full h-full flex flex-col">
-      <div className="flex items-center justify-between p-4 border-b bg-muted/20">
-        <div className="flex items-center space-x-2">
-          <Badge variant="outline">{getLanguage(fileName)}</Badge>
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+      {/* Header - Fixed height */}
+      <div
+        className="flex items-center justify-between p-4 border-b bg-muted/20"
+        style={{ flexShrink: 0 }}
+      >
+        <div className="flex items-center space-x-3">
+          <Badge variant="outline" className="font-mono">
+            {language.toUpperCase()}
+          </Badge>
           <span className="text-sm text-muted-foreground">
-            {content.split('\n').length} lines
+            {lineCount.toLocaleString()} lines • {charCount.toLocaleString()} chars
           </span>
+          {error && (
+            <Badge variant="destructive" className="text-xs">
+              ⚠️ Fallback mode
+            </Badge>
+          )}
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <select
+            value={theme}
+            onChange={(e) => setTheme(e.target.value)}
+            className="px-3 py-1 text-sm bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+            disabled={loading}
+          >
+            {shikiService.getAvailableThemes().map(themeOption => (
+              <option key={themeOption.value} value={themeOption.value}>
+                {themeOption.label}
+              </option>
+            ))}
+          </select>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={copyToClipboard}
+            className={copied ? 'text-green-600' : ''}
+          >
+            {copied ? '✓ Copied!' : '📋 Copy'}
+          </Button>
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto">
-        <pre className="p-4 text-sm font-mono bg-gray-50 dark:bg-gray-900 h-full overflow-auto">
-          <code>{content}</code>
-        </pre>
+      {/* CRITICAL: Code container that WILL scroll */}
+      <div
+        style={{
+          flex: 1,
+          overflow: 'auto',
+          minHeight: 0,
+          backgroundColor: '#1e1e1e',
+          fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Monaco, Consolas, monospace'
+        }}
+      >
+        <div
+          dangerouslySetInnerHTML={{ __html: highlightedCode }}
+          style={{ minHeight: '100%' }}
+        />
       </div>
     </div>
   );
@@ -302,8 +403,11 @@ const PDFPreview = ({ url, fileName }) => {
   const [error, setError] = useState(false);
 
   return (
-    <div className="w-full h-full flex flex-col">
-      <div className="flex items-center justify-between p-4 border-b bg-muted/20">
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <div
+        className="flex items-center justify-between p-4 border-b bg-muted/20"
+        style={{ flexShrink: 0 }}
+      >
         <Badge variant="outline">PDF Document</Badge>
         <Button
           variant="outline"
@@ -315,7 +419,7 @@ const PDFPreview = ({ url, fileName }) => {
         </Button>
       </div>
 
-      <div className="flex-1 relative">
+      <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="flex items-center space-x-2">
@@ -339,7 +443,7 @@ const PDFPreview = ({ url, fileName }) => {
 
         <iframe
           src={url}
-          className="w-full h-full border-0"
+          style={{ width: '100%', height: '100%', border: 'none' }}
           title={fileName}
           onLoad={() => setLoading(false)}
           onError={() => {
@@ -355,16 +459,19 @@ const PDFPreview = ({ url, fileName }) => {
 // Video Preview Component
 const VideoPreview = ({ url, fileName }) => {
   return (
-    <div className="w-full h-full flex flex-col">
-      <div className="flex items-center justify-between p-4 border-b bg-muted/20">
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <div
+        className="flex items-center justify-between p-4 border-b bg-muted/20"
+        style={{ flexShrink: 0 }}
+      >
         <Badge variant="outline">Video</Badge>
       </div>
 
-      <div className="flex-1 flex items-center justify-center bg-black p-4">
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'black', padding: '1rem', minHeight: 0 }}>
         <video
           src={url}
           controls
-          className="max-w-full max-h-full"
+          style={{ maxWidth: '100%', maxHeight: '100%' }}
           preload="metadata"
         >
           Your browser does not support video playback.
@@ -377,12 +484,15 @@ const VideoPreview = ({ url, fileName }) => {
 // Audio Preview Component
 const AudioPreview = ({ url, fileName }) => {
   return (
-    <div className="w-full h-full flex flex-col">
-      <div className="flex items-center justify-between p-4 border-b bg-muted/20">
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <div
+        className="flex items-center justify-between p-4 border-b bg-muted/20"
+        style={{ flexShrink: 0 }}
+      >
         <Badge variant="outline">Audio</Badge>
       </div>
 
-      <div className="flex-1 flex items-center justify-center p-8">
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem', minHeight: 0 }}>
         <div className="text-center space-y-6">
           <Music className="w-24 h-24 mx-auto text-muted-foreground" />
           <h3 className="text-lg font-medium">{fileName}</h3>
@@ -441,15 +551,18 @@ const TextPreview = ({ url, fileName }) => {
   }
 
   return (
-    <div className="w-full h-full flex flex-col">
-      <div className="flex items-center justify-between p-4 border-b bg-muted/20">
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <div
+        className="flex items-center justify-between p-4 border-b bg-muted/20"
+        style={{ flexShrink: 0 }}
+      >
         <Badge variant="outline">Text Document</Badge>
         <span className="text-sm text-muted-foreground">
           {content.split('\n').length} lines, {content.length} characters
         </span>
       </div>
 
-      <div className="flex-1 overflow-auto p-4 bg-white dark:bg-gray-900">
+      <div style={{ flex: 1, overflow: 'auto', padding: '1rem', minHeight: 0 }}>
         <div className="max-w-4xl mx-auto">
           <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">
             {content}
@@ -503,7 +616,7 @@ const UnsupportedPreview = ({ fileName, fileSize, onDownload }) => {
   );
 };
 
-// Main File Preview Modal
+// MAIN FILE PREVIEW MODAL - FINAL WORKING VERSION
 const FilePreviewModal = ({
   isOpen,
   onClose,
@@ -599,37 +712,87 @@ const FilePreviewModal = ({
   const canPreview = ['image', 'code', 'pdf', 'video', 'audio', 'document'].includes(category);
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-7xl max-h-[95vh] w-[95vw] flex flex-col p-0">
-        <DialogHeader className="flex-shrink-0 p-6 pb-0">
-          <div className="flex items-center justify-between">
-            <div>
-              <DialogTitle className="text-lg font-semibold truncate">
-                {file.name}
-              </DialogTitle>
-              <div className="flex items-center space-x-2 mt-1">
-                <Badge variant="outline">{category}</Badge>
-                <span className="text-sm text-muted-foreground">
-                  {(file.size / 1024 / 1024).toFixed(2)} MB
-                </span>
-                {canPreview && (
-                  <Badge variant="secondary">Preview Available</Badge>
-                )}
+    <>
+      {/* Add global styles to head without JSX syntax */}
+      <style dangerouslySetInnerHTML={{
+        __html: `
+          .modal-code-container .shiki {
+            overflow-x: auto !important;
+            overflow-y: visible !important;
+            max-width: 100% !important;
+            white-space: pre !important;
+            margin: 0 !important;
+            min-width: 0 !important;
+            word-wrap: normal !important;
+            word-break: normal !important;
+            box-sizing: border-box !important;
+          }
+
+          .modal-code-container .shiki:focus {
+            outline: 2px solid #0066cc;
+            outline-offset: 2px;
+          }
+
+          [data-radix-dialog-content] {
+            max-height: 85vh !important;
+            height: 85vh !important;
+            overflow: hidden !important;
+          }
+        `
+      }} />
+
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        {/* CRITICAL: Force explicit height and overflow */}
+        <DialogContent
+          className="max-w-7xl w-[95vw] flex flex-col p-0"
+          style={{
+            height: '85vh',
+            maxHeight: '85vh',
+            overflow: 'hidden'
+          }}
+        >
+          {/* Header - Fixed height */}
+          <DialogHeader
+            className="p-6 pb-4 border-b"
+            style={{ flexShrink: 0 }}
+          >
+            <div className="flex items-center justify-between">
+              <div className="min-w-0">
+                <DialogTitle className="text-lg font-semibold truncate">
+                  {file.name}
+                </DialogTitle>
+                <div className="flex items-center space-x-2 mt-1">
+                  <Badge variant="outline">{category}</Badge>
+                  <span className="text-sm text-muted-foreground">
+                    {(file.size / 1024 / 1024).toFixed(2)} MB
+                  </span>
+                  {canPreview && (
+                    <Badge variant="secondary">Preview Available</Badge>
+                  )}
+                </div>
               </div>
+
+              <Button variant="outline" size="sm" onClick={handleDownload}>
+                <Download className="w-4 h-4 mr-2" />
+                Download
+              </Button>
             </div>
+          </DialogHeader>
 
-            <Button variant="outline" size="sm" onClick={handleDownload}>
-              <Download className="w-4 h-4 mr-2" />
-              Download
-            </Button>
+          {/* Content - CRITICAL: This forces scrolling */}
+          <div
+            style={{
+              flex: 1,
+              minHeight: 0,
+              overflow: 'hidden',
+              height: 'calc(85vh - 120px)' // Force exact height
+            }}
+          >
+            {renderPreview()}
           </div>
-        </DialogHeader>
-
-        <div className="flex-1 overflow-hidden">
-          {renderPreview()}
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 

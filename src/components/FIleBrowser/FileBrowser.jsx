@@ -42,6 +42,8 @@ import {
 export const FileBrowser = React.memo(({ s3Service, onDisconnect }) => {
   // Core data state
   const [items, setItems] = useState({ folders: [], files: [] });
+  const [showDebug, setShowDebug] = useState(false);
+
 
   // Main async operations
   const { loading, error, execute, clearError } = useAsyncOperation();

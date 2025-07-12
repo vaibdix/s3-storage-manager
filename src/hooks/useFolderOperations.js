@@ -1,4 +1,4 @@
-// hooks/useFolderOperations.js
+// hooks/useFolderOperations.js - FIXED VERSION
 import { useState, useCallback } from 'react';
 
 export const useFolderOperations = (s3Service, currentPath, onOperationComplete) => {
@@ -27,12 +27,21 @@ export const useFolderOperations = (s3Service, currentPath, onOperationComplete)
   }, []);
 
   const createFolder = useCallback(async (folderName) => {
-    if (!s3Service || !currentPath !== undefined) return;
+    // FIXED: The condition was wrong - it should check if currentPath is NOT undefined
+    if (!s3Service || currentPath === undefined) {
+      console.error('S3Service or currentPath not available:', { s3Service: !!s3Service, currentPath });
+      throw new Error('S3 service not configured or path not available');
+    }
 
     setLoading('create', true);
     try {
+      // Create the full folder path
       const folderPath = currentPath + folderName.trim() + '/';
+      console.log('Creating folder at path:', folderPath);
+
       await s3Service.createFolder(folderPath);
+      console.log('Folder created successfully');
+
       setShowNewFolder(false);
 
       if (onOperationComplete) {
